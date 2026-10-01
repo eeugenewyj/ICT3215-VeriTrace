@@ -8,6 +8,7 @@ parser_timeout_s = 120
 enabled_families = ["edge_history"]
 # Add after a successful desktop benchmark:
 # budget_profile = ".runs/benchmark.budget.json"
+# tokenizer_path = ".external/qwen3-tokenizer.json"
 
 # Parser commands/profiles are added after compatibility validation.
 [parser_commands]

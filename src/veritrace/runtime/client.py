@@ -67,7 +67,7 @@ class OllamaClient:
     def chat(self, messages, *, tools=None, schema=None):
         metadata = self.metadata()  # Check local model BEFORE any case text is sent.
         payload = {"model": self.settings.model_name, "messages": messages, "stream": False,
-                   "options": {"num_ctx": self.settings.num_ctx, "temperature": self.settings.temperature}}
+                   "options": {"num_ctx": self.settings.num_ctx, "temperature": self.settings.temperature, "num_predict": 768}}
         if tools is not None:
             payload["tools"] = tools
         if schema is not None:

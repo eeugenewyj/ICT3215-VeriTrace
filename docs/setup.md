@@ -24,6 +24,14 @@ Invoke-RestMethod http://127.0.0.1:11434/api/version
 Stop the victim VM before benchmarking. Install this Python package on the
 desktop, copy veritrace.example.toml to veritrace.local.toml, then run:
 
+Download the tokenizer from the pinned [official Qwen model revision](https://huggingface.co/Qwen/Qwen3-8B/tree/b968826d9c46dd6066d109eabc6255188de91218)
+and configure tokenizer_path = ".external/qwen3-tokenizer.json":
+
+```powershell
+New-Item -ItemType Directory -Force .external | Out-Null
+Invoke-WebRequest -Uri 'https://huggingface.co/Qwen/Qwen3-8B/resolve/b968826d9c46dd6066d109eabc6255188de91218/tokenizer.json' -OutFile '.external/qwen3-tokenizer.json'
+```
+
 ```powershell
 uv run python -m veritrace doctor --config veritrace.local.toml
 uv run python -m veritrace benchmark --config veritrace.local.toml --output .runs/benchmark.json
@@ -34,8 +42,12 @@ Keep benchmark.json, benchmark.budget.json and the relevant server log.
 GPU acceleration must be observed, not inferred from the RX 6750 XT. The
 [hardware guide](https://docs.ollama.com/gpu) describes AMD/Vulkan support.
 Set budget_profile in the configuration only after a passing benchmark.
-The conservative UTF-8 budget is empirical and tied to runtime version,
-model digest, template and context length; it is not an exact tokenizer.
+The conservative token budget is empirical and tied to runtime version,
+model digest, template, tokenizer hash and context length. Serialized payload
+tokens plus framing allowance are not an exact rendering of Ollama's template.
+Without a tokenizer the byte upper bound is available but usually too restrictive
+for verification at 4,096 tokens. Both methods require measured server-count and
+retained-sentinel checks before live cases.
 Failures require a recorded model/context adjustment and rebenchmark.
 
 Initially use localhost. Laptop access needs a later private-LAN configuration

@@ -34,7 +34,11 @@ def benchmark(client, budget, *, trials=3):
         trial["duration_s"] = time.perf_counter() - started
         results.append(trial)
     probes = []
-    for text in ("short", "résumé 新加坡", "boundary " * 180):
+    # Use a probe near the conservative input limit, keeping output reserve.
+    boundary = "boundary "
+    while budget.estimate([{"role": "user", "content": boundary}], None, SCHEMA) < client.settings.num_ctx - budget.reserve - 200:
+        boundary += "boundary "
+    for text in ("short", "résumé 新加坡", boundary):
         sentinel = secrets.token_hex(8)
         messages = [{"role": "user", "content": f"Ignore the filler and return this nonce as JSON: {sentinel}. Filler: {text}"}]
         probe = {"estimated_prompt": budget.estimate(messages, None, SCHEMA), "passed": False}
@@ -47,7 +51,7 @@ def benchmark(client, budget, *, trials=3):
         probes.append(probe)
     tool_passed = len(results) >= 3 and all(t["passed"] for t in results)
     passed = tool_passed and all(p["passed"] for p in probes)
-    profile = {"method": "utf8-upper-bound-v1", "verified": passed, "num_ctx": client.settings.num_ctx,
+    profile = {"method": budget.method, "tokenizer_sha256": budget.tokenizer_sha256, "verified": passed, "num_ctx": client.settings.num_ctx,
                **{k: metadata[k] for k in ("digest", "template_sha256", "runtime_version")}}
     return {"kind": "synthetic capability check", "passed": passed, "tool_check_passed": tool_passed,
             "metadata": metadata, "trials": results, "budget_probes": probes, "budget_profile": profile,

@@ -25,6 +25,7 @@ class Settings(BaseModel):
     parser_profiles: dict[str, Path] = Field(default_factory=dict)
     enabled_families: list[str] = Field(default_factory=lambda: ["edge_history"])
     budget_profile: Path | None = None
+    tokenizer_path: Path | None = None
 
     @field_validator("model_base_url")
     @classmethod
@@ -59,7 +60,7 @@ class Settings(BaseModel):
 def load_settings(path: Path) -> Settings:
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
-        for key in ("budget_profile",):
+        for key in ("budget_profile", "tokenizer_path"):
             if data.get(key):
                 data[key] = (path.parent / data[key]).resolve()
         data["parser_profiles"] = {k: (path.parent / v).resolve() for k, v in data.get("parser_profiles", {}).items()}

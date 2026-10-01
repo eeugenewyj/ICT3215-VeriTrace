@@ -89,3 +89,26 @@ def test_benchmark_only_passes_after_real_tool_return():
     assert len(result["trials"]) == 3
     assert all(t["receipt"]["executed"] and t["final"]["nonce"] == t["receipt"]["result"]["nonce"] for t in result["trials"])
     assert len({t["final"]["nonce"] for t in result["trials"]}) == 3
+
+
+def test_tokenizer_profile_is_bound_to_actual_vocabulary(tmp_path):
+    import hashlib
+    from tokenizers import Tokenizer, models, pre_tokenizers
+    from veritrace.settings import Settings
+    from veritrace.runtime.budget import ContextBudget
+    from veritrace.errors import ContextLimitError
+    tokenizer = Tokenizer(models.WordLevel({"[UNK]": 0, "hello": 1}, unk_token="[UNK]"))
+    tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+    path = tmp_path / "tokenizer.json"
+    tokenizer.save(str(path))
+    metadata = {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps({"method": "tokenizer-json-upper-bound-v1", "verified": True, "num_ctx": 4096, "tokenizer_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), **metadata}))
+    settings = Settings(tokenizer_path=path, budget_profile=profile)
+    budget = ContextBudget(settings, metadata)
+    budget.ensure([{"role": "user", "content": "hello " * 100}], None, None)
+    with pytest.raises(ContextLimitError):
+        budget.ensure([{"role": "user", "content": "hello " * 4000}], None, None)
+    path.write_text(path.read_text() + " ")
+    with pytest.raises(ContextLimitError):
+        ContextBudget(settings, metadata).ensure([], None, None)
