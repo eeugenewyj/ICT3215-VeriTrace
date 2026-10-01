@@ -18,9 +18,27 @@ def main(argv=None):
         command.add_argument("--config", type=Path, required=True)
         if name == "benchmark":
             command.add_argument("--output", type=Path, required=True)
+    run = commands.add_parser("run", help="Analyse an acquired artefact folder")
+    run.add_argument("--config", type=Path, required=True)
+    run.add_argument("--case", type=Path, required=True)
+    run.add_argument("--output", type=Path, required=True)
+    evaluate = commands.add_parser("evaluate", help="Evaluate a frozen labelled corpus")
+    evaluate.add_argument("--config", type=Path, required=True)
+    evaluate.add_argument("--corpus", type=Path, required=True)
+    evaluate.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         settings = load_settings(args.config)
+        if args.command == "evaluate":
+            from .evaluation.corpus import evaluate_corpus
+            result = evaluate_corpus(args.corpus, args.output, settings)
+            print(json.dumps(result["metrics"], ensure_ascii=False, indent=2))
+            return 3 if result["metrics"]["operational_failure_rate"] == 1 else 0
+        if args.command == "run":
+            from .service import run_case
+            result = run_case(args.case, args.output, settings)
+            print(json.dumps({"status": result.status, "report": result.output_paths["report.html"], "errors": result.errors, "claim_errors": result.claim_errors}, ensure_ascii=False, indent=2))
+            return {"complete": 0, "error": 3, "partial": 4}[result.status]
         with OllamaClient(settings) as client:
             metadata = client.metadata()
             if args.command == "doctor":
