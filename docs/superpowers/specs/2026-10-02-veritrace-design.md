@@ -2,7 +2,7 @@
 
 Date: 2 October 2026 (Asia/Singapore)
 
-Status: Implementation planning requested by the user on 2 October 2026 following design review and VM setup. Choices explicitly agreed in discussion are recorded below; runtime and parser defaults remain subject to feasibility checks. Product implementation has not started.
+Status: Implementation planning requested by the user on 2 October 2026 following design review and VM setup. Choices explicitly agreed in discussion are recorded below; runtime and parser defaults remain subject to feasibility checks. The backend prototype is implemented; live desktop-model, victim parser and acquired-case validation remain pending. See docs/implementation-status.md for current evidence and limitations.
 
 ## 1. Purpose and agreed scope
 

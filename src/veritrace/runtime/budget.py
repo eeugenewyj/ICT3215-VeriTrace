@@ -2,6 +2,7 @@ import json
 import hashlib
 
 from ..errors import ContextLimitError
+from .benchmark import PROTOCOL
 
 
 class ContextBudget:
@@ -48,7 +49,7 @@ class ContextBudget:
 
     def ensure(self, messages, tools, schema):
         expected = {k: self.metadata.get(k) for k in ("digest", "template_sha256", "runtime_version")}
-        if not self.profile or self.profile.get("verified") is not True or self.profile.get("method") != self.method or self.profile.get("num_ctx") != self.settings.num_ctx or any(self.profile.get(k) != v for k, v in expected.items()) or self.profile.get("tokenizer_sha256") != self.tokenizer_sha256:
+        if not self.profile or self.profile.get("verified") is not True or self.profile.get("protocol") != PROTOCOL or self.profile.get("method") != self.method or self.profile.get("num_ctx") != self.settings.num_ctx or any(self.profile.get(k) != v for k, v in expected.items()) or self.profile.get("tokenizer_sha256") != self.tokenizer_sha256:
             raise ContextLimitError("Run the model benchmark to create a matching verified budget profile")
         if self.estimate(messages, tools, schema) + self.reserve > self.settings.num_ctx:
             raise ContextLimitError("Request exceeds the conservative context budget; narrow input or benchmark a larger context")

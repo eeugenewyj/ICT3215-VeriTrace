@@ -60,7 +60,7 @@ def test_budget_requires_matching_verified_profile(tmp_path):
     with pytest.raises(ContextLimitError):
         ContextBudget(Settings(), metadata).ensure([], None, None)
     path = tmp_path / "budget.json"
-    path.write_text(json.dumps({"verified": True, "method": "utf8-upper-bound-v1", "num_ctx": 4096, **metadata}), encoding="utf-8")
+    path.write_text(json.dumps({"verified": True, "protocol": "native-tools-then-json-v1", "method": "utf8-upper-bound-v1", "num_ctx": 4096, **metadata}), encoding="utf-8")
     budget = ContextBudget(Settings(budget_profile=path), metadata)
     budget.ensure([{"role": "user", "content": "résumé"}], None, None)
     with pytest.raises(ContextLimitError):
@@ -80,8 +80,10 @@ def test_benchmark_only_passes_after_real_tool_return():
             return {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
         def chat(self, messages, *, tools=None, schema=None):
             if tools:
+                if any(m["role"] == "tool" for m in messages):
+                    return ModelTurn(content="Ready to finalize")
                 return ModelTurn(tool_calls=[{"function": {"name": "get_benchmark_fact", "arguments": {"case_id": "benchmark"}}}])
-            result = json.loads(messages[-1]["content"])
+            result = json.loads(next(m["content"] for m in messages if m["role"] == "tool"))
             return ModelTurn(content=json.dumps(result), metrics={"prompt_eval_count": 20})
     client = Client()
     result = benchmark(client, ContextBudget(client.settings, client.metadata()), trials=3)
@@ -89,6 +91,62 @@ def test_benchmark_only_passes_after_real_tool_return():
     assert len(result["trials"]) == 3
     assert all(t["receipt"]["executed"] and t["final"]["nonce"] == t["receipt"]["result"]["nonce"] for t in result["trials"])
     assert len({t["final"]["nonce"] for t in result["trials"]}) == 3
+
+
+def test_benchmark_exercises_retrieval_stop_and_schema_only_finalization():
+    from veritrace.runtime.benchmark import benchmark
+    from veritrace.runtime.client import ModelTurn
+    from veritrace.runtime.budget import ContextBudget
+    from veritrace.settings import Settings
+    class Client:
+        settings = Settings()
+        def __init__(self):
+            self.requests = []
+        def metadata(self):
+            return {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
+        def chat(self, messages, *, tools=None, schema=None):
+            self.requests.append({"messages": messages, "tools": tools, "schema": schema})
+            if tools:
+                if any(m["role"] == "tool" for m in messages):
+                    return ModelTurn(content="Ready to finalize", metrics={"prompt_eval_count": 20})
+                return ModelTurn(tool_calls=[{"function": {"name": "get_benchmark_fact", "arguments": {"case_id": "benchmark"}}}], metrics={"prompt_eval_count": 20})
+            tool_results = [m for m in messages if m["role"] == "tool"]
+            if tool_results:
+                return ModelTurn(content=tool_results[-1]["content"], metrics={"prompt_eval_count": 20})
+            # Probes fail intentionally: they do not bypass measured retention checks.
+            return ModelTurn(content='{"nonce":"wrong"}', metrics={"prompt_eval_count": 20})
+    client = Client()
+    value = benchmark(client, ContextBudget(client.settings, client.metadata()), trials=3)
+    assert value["tool_check_passed"]
+    assert not value["passed"]
+    assert all("retrieval_stop_metrics" in t for t in value["trials"])
+    assert all(not (r["tools"] and r["schema"]) for r in client.requests)
+
+
+def test_missing_tool_stage_counts_cannot_validate_a_budget_profile():
+    from veritrace.runtime.benchmark import benchmark
+    from veritrace.runtime.client import ModelTurn
+    from veritrace.runtime.budget import ContextBudget
+    from veritrace.settings import Settings
+    class Client:
+        settings = Settings()
+        def metadata(self):
+            return {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
+        def chat(self, messages, *, tools=None, schema=None):
+            if tools and not any(m["role"] == "tool" for m in messages):
+                return ModelTurn(tool_calls=[{"function": {"name": "get_benchmark_fact", "arguments": {"case_id": "benchmark"}}}])
+            if tools:
+                return ModelTurn(content="Ready")
+            tool_results = [m for m in messages if m["role"] == "tool"]
+            if tool_results:
+                return ModelTurn(content=tool_results[-1]["content"], metrics={"prompt_eval_count": 20})
+            import re
+            nonce = re.search(r"nonce as JSON: ([0-9a-f]+)", messages[-1]["content"]).group(1)
+            return ModelTurn(content=json.dumps({"nonce": nonce}), metrics={"prompt_eval_count": 20})
+    client = Client()
+    value = benchmark(client, ContextBudget(client.settings, client.metadata()), trials=3)
+    assert value["tool_check_passed"]
+    assert not value["budget_profile"]["verified"]
 
 
 def test_tokenizer_profile_is_bound_to_actual_vocabulary(tmp_path):
@@ -103,7 +161,7 @@ def test_tokenizer_profile_is_bound_to_actual_vocabulary(tmp_path):
     tokenizer.save(str(path))
     metadata = {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
     profile = tmp_path / "profile.json"
-    profile.write_text(json.dumps({"method": "tokenizer-json-upper-bound-v1", "verified": True, "num_ctx": 4096, "tokenizer_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), **metadata}))
+    profile.write_text(json.dumps({"method": "tokenizer-json-upper-bound-v1", "protocol": "native-tools-then-json-v1", "verified": True, "num_ctx": 4096, "tokenizer_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), **metadata}))
     settings = Settings(tokenizer_path=path, budget_profile=profile)
     budget = ContextBudget(settings, metadata)
     budget.ensure([{"role": "user", "content": "hello " * 100}], None, None)

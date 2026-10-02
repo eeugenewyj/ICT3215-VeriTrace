@@ -9,6 +9,7 @@ from ..evidence.models import EvidenceRecord, SourceLocator, stable_record_id
 from ..evidence.time import native_time
 from .base import CoverageEntry, ExtractionResult
 from .runner import ParserRunner
+from .companions import stage_source, registry_name
 
 
 class UserAssistAdapter:
@@ -23,12 +24,14 @@ class UserAssistAdapter:
             try:
                 if not self.batch_path.is_file():
                     raise DependencyError("Pinned UserAssist batch configuration is missing")
-                output = case.working_root / "raw/userassist" / f"{item.item_id}-{uuid.uuid4().hex[:8]}"
-                source = case.working_root / "evidence" / item.acquired_path
+                folder = case.working_root / "raw/userassist" / f"{item.item_id}-{uuid.uuid4().hex[:8]}"
+                output = folder / "output"
+                source, companion_sources, handling = stage_source(case, item, folder / "input", registry_name(item), (".LOG1", ".LOG2"))
                 self.runner.run([*self.command, "-f", str(source), "--bn", str(self.batch_path), "--csv", str(output), "--csvf", "export.csv", "--dt", "o"], output)
                 local = self.read_export(case, item, source, output)
+                local = [r.model_copy(update={"raw_fields": r.raw_fields | {"companion_sources": companion_sources}}) for r in local]
                 records.extend(local)
-                coverage.append(CoverageEntry(item_id=item.item_id, family="userassist", status="parsed" if local else "parsed-with-no-records", record_count=len(local), companion_handling=["RECmd log replay uses supplied adjacent working-copy logs; see parser receipt for replay diagnostics."]))
+                coverage.append(CoverageEntry(item_id=item.item_id, family="userassist", status="parsed" if local else "parsed-with-no-records", record_count=len(local), companion_handling=handling))
             except (DependencyError, ParserError, InputError, OSError, ValueError) as exc:
                 coverage.append(CoverageEntry(item_id=item.item_id, family="userassist", status="failed", error_code=getattr(exc, "code", "parser_schema"), reason=str(exc)))
         return ExtractionResult(records=records, coverage=coverage)
@@ -70,5 +73,5 @@ class UserAssistAdapter:
                 locator = SourceLocator(kind="registry_value", identifiers={"key_path": row["KeyPath"], "value_name": row["ValueName"]})
                 row["plugin_detail_sha256"] = sha256_file(detail_path)
                 row["raw_binary_value"] = None  # Preserved in source hive; not exported by this plugin.
-                records.append(EvidenceRecord(record_id=stable_record_id(case.manifest.case_id, "userassist", item.calculated_sha256, locator), case_id=case.manifest.case_id, family="userassist", item_id=item.item_id, source_sha256=item.calculated_sha256, original_path=item.original_path, locator=locator, times=[stamp], account=item.account, sid=item.sid, application="Windows UserAssist", target=row["ValueData"], parser=self.identity, raw_fields=row, raw_output_locator={"path": path.relative_to(case.working_root).as_posix(), "line": line, "sha256": digest}, limitations=["GUI program-activity trace, not attribution to a person; counter/focus fields have plugin-specific semantics.", "Raw encoded name and original hive locator retained; binary value bytes remain in the preserved hive and are not exported by this plugin.", "Registry key last-write time is not used as an action timestamp."]))
+                records.append(EvidenceRecord(record_id=stable_record_id(case.manifest.case_id, "userassist", item.calculated_sha256, locator, item_id=item.item_id), case_id=case.manifest.case_id, family="userassist", item_id=item.item_id, source_sha256=item.calculated_sha256, original_path=item.original_path, locator=locator, times=[stamp], account=item.account, sid=item.sid, application="Windows UserAssist", target=row["ValueData"], parser=self.identity, raw_fields=row, raw_output_locator={"path": path.relative_to(case.working_root).as_posix(), "line": line, "sha256": digest}, limitations=["GUI program-activity trace, not attribution to a person; counter/focus fields have plugin-specific semantics.", "Raw encoded name and original hive locator retained; binary value bytes remain in the preserved hive and are not exported by this plugin.", "Registry key last-write time is not used as an action timestamp."]))
         return records

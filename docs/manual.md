@@ -11,6 +11,15 @@ identifiers: edge_history, lnk, jumplist, prefetch, userassist, recyclebin.
 All supplied files are inventoried; undeclared files are unknown/unsupported.
 Ground-truth labels stay outside this input folder.
 
+When exports are renamed, declare companion_item_ids and preserve the companion's
+original_path relative to the main source, such as History-wal or NTUSER.DAT.LOG1.
+The adapters stage supplied companions under the parser-required names, record
+their item IDs/hashes and disclose missing companions. An unidentifiable declared
+companion or two candidates for the same role causes a parsing failure. Registry
+logs are retained and staged; successful replay still needs parser-log and source
+comparison checks. Companion files are inventoried even when their family is
+unknown; their use is reported on the parent source's coverage entry.
+
 ```powershell
 uv run veritrace run --case .cases/dev01 --output .runs/dev01 --config veritrace.local.toml
 ```
@@ -23,6 +32,14 @@ The backend runs claim extraction, requires an actual model-generated
 extract_case call, permits bounded evidence queries and validates every cited
 record against claim-specific retrieval receipts. No arbitrary shell, SQL,
 file-path selection or network-fetch tool is exposed to either agent.
+
+Retrieval uses native tool turns without an assessment JSON constraint. Final
+assessment is a separate schema-only turn, retaining the returned evidence.
+Every claim requires a successful evidence search; extraction alone cannot
+justify an unverified assessment. Identical source bytes from distinct item IDs
+retain distinct record IDs and account provenance. Edge parsing requires every
+supported native visit/download row identity to resolve in the export; omitted
+or ambiguous rows fail that source while its raw export remains preserved.
 
 Open report.html locally. Review exact testimony, interpretation, uncertainty,
 time roles, coverage, citations, alternatives and operational errors. Links

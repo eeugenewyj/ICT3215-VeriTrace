@@ -62,8 +62,8 @@ def load_settings(path: Path) -> Settings:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
         for key in ("budget_profile", "tokenizer_path"):
             if data.get(key):
-                data[key] = (path.parent / data[key]).resolve()
-        data["parser_profiles"] = {k: (path.parent / v).resolve() for k, v in data.get("parser_profiles", {}).items()}
+                data[key] = (path.parent / data[key]).absolute()
+        data["parser_profiles"] = {k: (path.parent / v).absolute() for k, v in data.get("parser_profiles", {}).items()}
         return Settings.model_validate(data)
     except (OSError, ValueError) as exc:
         raise InputError(f"Cannot load configuration: {exc}") from exc

@@ -50,6 +50,11 @@ for verification at 4,096 tokens. Both methods require measured server-count and
 retained-sentinel checks before live cases.
 Failures require a recorded model/context adjustment and rebenchmark.
 
+The profile also records native-tools-then-json-v1: retrieval with native tools,
+a tool-result/stop turn, then constrained JSON with tools omitted. Server prompt
+counts are checked for all three stages as well as short, Unicode and near-boundary
+retention probes. Old profiles without this protocol identity are rejected.
+
 Initially use localhost. Laptop access needs a later private-LAN configuration
 limited to the laptop, after localhost succeeds. Do not expose the server publicly.
 Inference and victim experiments occur at different times. The application

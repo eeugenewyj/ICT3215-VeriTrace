@@ -79,7 +79,7 @@ def test_changed_original_or_metadata_detected(tmp_path):
 def test_stable_id_uses_case_source_and_locator():
     from veritrace.evidence.models import SourceLocator, stable_record_id
     locator = SourceLocator(kind="sqlite", identifiers={"table": "visits", "id": 1})
-    first = stable_record_id("case01", "edge_history", "0" * 64, locator)
-    assert first == stable_record_id("case01", "edge_history", "0" * 64, locator)
-    assert first != stable_record_id("case02", "edge_history", "0" * 64, locator)
-    assert first != stable_record_id("case01", "edge_history", "1" * 64, locator)
+    first = stable_record_id("case01", "edge_history", "0" * 64, locator, item_id="history01")
+    assert first == stable_record_id("case01", "edge_history", "0" * 64, locator, item_id="history01")
+    assert first != stable_record_id("case02", "edge_history", "0" * 64, locator, item_id="history01")
+    assert first != stable_record_id("case01", "edge_history", "1" * 64, locator, item_id="history01")

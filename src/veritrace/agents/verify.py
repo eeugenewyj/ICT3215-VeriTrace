@@ -47,17 +47,30 @@ def verify_claims(case, claims, client, budget, tools):
     schema = compact_schema(Assessment.model_json_schema())
     for claim in claims:
         messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "claim": claim.model_dump(mode="json"), "coverage": [c.model_dump(mode="json") for c in tools.coverage]}, ensure_ascii=False, separators=(",", ":"))}]
-        count, repairs = 0, 0
+        count, repairs, missing_search = 0, 0, 0
         try:
             while True:
-                budget.ensure(messages, definitions, schema)
-                turn = client.chat(messages, tools=definitions, schema=schema)
+                # Native tool syntax must remain unconstrained by the final JSON grammar.
+                budget.ensure(messages, definitions, None)
+                turn = client.chat(messages, tools=definitions)
                 if turn.tool_calls:
                     if count + len(turn.tool_calls) > 12:
                         raise WorkflowError("Twelve tool calls exhausted for this claim")
                     count += len(turn.tool_calls)
                     messages.extend([turn.as_assistant_message(), *execute_request(turn, tools, claim_id=claim.claim_id)])
                     continue
+                if not any(r.claim_id == claim.claim_id and r.name == "search_records" and r.error is None for r in tools.ledger.entries):
+                    if missing_search == 2:
+                        raise WorkflowError("No successful evidence search for this claim after two corrections")
+                    missing_search += 1
+                    messages.append({"role": "user", "content": "Search the registered case evidence before finalizing this claim, even if the search returns no records."})
+                    continue
+                # Keep the retrieval context; request schema-only output in a separate turn.
+                final_messages = [*messages, {"role": "user", "content": "Retrieval is finished. Return the assessment JSON for this claim using only the evidence returned above."}]
+                budget.ensure(final_messages, None, schema)
+                turn = client.chat(final_messages, schema=schema)
+                if turn.tool_calls:
+                    raise ModelError("Final assessment returned tool calls instead of JSON")
                 try:
                     assessment = Assessment.model_validate_json(turn.content)
                     if assessment.claim_id != claim.claim_id:

@@ -17,6 +17,11 @@ def verdict(status="supported", cites=None):
     return ModelTurn(content=json.dumps({"claim_id": "claim01", "status": status, "cited_record_ids": [make_record().record_id] if cites is None else cites, "justification": "Available positive browser record", "alternative_explanations": ["Account activity does not identify the person"], "limitations": ["A download does not establish document reading"]}))
 
 
+def finished():
+    from veritrace.runtime.client import ModelTurn
+    return ModelTurn(content="Evidence retrieved; finalize this claim.")
+
+
 def test_extract_refusal_is_workflow_error(tmp_path):
     from veritrace.agents.verify import verify_claims
     from veritrace.errors import WorkflowError
@@ -31,12 +36,13 @@ def test_extract_refusal_is_workflow_error(tmp_path):
 def test_genuine_model_requested_extraction_and_retrieval(tmp_path):
     from veritrace.agents.verify import verify_claims
     case, tools = backend(tmp_path)
-    client = ReplayClient([call("extract_case", {"case_id": "case01"}), call("search_records", {"case_id": "case01", "filters": {"target": "report.pdf"}, "cursor": None}), verdict()])
+    client = ReplayClient([call("extract_case", {"case_id": "case01"}), call("search_records", {"case_id": "case01", "filters": {"target": "report.pdf"}, "cursor": None}), finished(), verdict()])
     result = verify_claims(case, [make_claim()], client, TestBudget(), tools)
     assert result.assessments[0].status == "supported"
     assert not result.claim_errors
     assert [r.name for r in tools.ledger.entries] == ["extract_case", "search_records"]
-    assert client.requests[-1]["messages"][-1]["role"] == "tool"
+    assert any(m["role"] == "tool" for m in client.requests[-1]["messages"])
+    assert client.requests[-1]["schema"] and client.requests[-1]["tools"] is None
     tools.index.connection.close()
 
 
@@ -44,10 +50,20 @@ def test_genuine_model_requested_extraction_and_retrieval(tmp_path):
 def test_invalid_citations_become_operational_errors(tmp_path, status, cites):
     from veritrace.agents.verify import verify_claims
     case, tools = backend(tmp_path)
-    client = ReplayClient([call("extract_case", {"case_id": "case01"}), *[verdict(status, cites)] * 3])
+    client = ReplayClient([call("extract_case", {"case_id": "case01"}), call("search_records", {"case_id": "case01", "filters": {}, "cursor": None}), *[t for _ in range(3) for t in (finished(), verdict(status, cites))]])
     result = verify_claims(case, [make_claim()], client, TestBudget(), tools)
     assert not result.assessments
     assert "claim01" in result.claim_errors
+    tools.index.connection.close()
+
+
+def test_unverified_without_an_evidence_search_is_an_operational_error(tmp_path):
+    from veritrace.agents.verify import verify_claims
+    case, tools = backend(tmp_path)
+    client = ReplayClient([call("extract_case", {"case_id": "case01"}), *[verdict("unverified", [])] * 3])
+    result = verify_claims(case, [make_claim()], client, TestBudget(), tools)
+    assert not result.assessments
+    assert result.claim_errors["claim01"]["code"] == "workflow_error"
     tools.index.connection.close()
 
 

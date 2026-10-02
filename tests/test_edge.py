@@ -19,6 +19,7 @@ def edge_case(tmp_path, duplicate=False):
             db.execute("INSERT INTO visits VALUES(8,1,11644473600000000)")
         db.execute("INSERT INTO downloads VALUES(2,?,11644473600000000,11644473601000000,0,0)", ("C:\\Users\\Victim\\Downloads\\report.pdf",))
         db.execute("INSERT INTO downloads_url_chains VALUES(2,0,?)", ("https://example.test/report.pdf",))
+    db.close()
     return register_case(root, tmp_path / "run")
 
 
@@ -56,7 +57,10 @@ def test_ambiguous_rows_are_not_guessed(tmp_path):
     case = edge_case(tmp_path, duplicate=True)
     rows = [{"data_type": "chrome:history:page_visited", "url": "https://example.test/report.pdf", "datetime": "1970-01-01T00:00:00+00:00"}, {"data_type": "chrome:history:file_downloaded", "download_id": 2, "target_path": "C:\\Users\\Victim\\Downloads\\report.pdf", "datetime": "1970-01-01T00:00:00+00:00"}]
     result = EdgeAdapter(["hindsight"], "2026.06", "0" * 64, runner=ExportRunner(rows)).extract(case, case.manifest.items)
-    assert result.records[0].locator.resolution == "ambiguous"
+    assert result.coverage[0].status == "failed"
+    assert "unresolved native row identities" in result.coverage[0].reason
+    assert not result.records
+    assert list((case.working_root / "raw/edge").glob("*/output/hindsight.jsonl"))
 
 
 @pytest.mark.parametrize("rows", [[{"data_type": "invented"}], []])

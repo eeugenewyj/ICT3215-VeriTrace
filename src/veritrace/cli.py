@@ -31,7 +31,7 @@ def main(argv=None):
         settings = load_settings(args.config)
         if args.command == "evaluate":
             from .evaluation.corpus import evaluate_corpus
-            result = evaluate_corpus(args.corpus, args.output, settings)
+            result = evaluate_corpus(args.corpus, args.output, settings, config_path=args.config)
             print(json.dumps(result["metrics"], ensure_ascii=False, indent=2))
             return 3 if result["metrics"]["operational_failure_rate"] == 1 else 0
         if args.command == "run":

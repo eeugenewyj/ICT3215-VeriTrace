@@ -2,7 +2,7 @@ import hashlib
 from typing import Any
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..errors import DependencyError, ModelError
 from ..settings import Settings
@@ -13,6 +13,15 @@ class ModelTurn(BaseModel):
     content: str = ""
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     metrics: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("tool_calls")
+    @classmethod
+    def valid_calls(cls, calls):
+        for call in calls:
+            function = call.get("function")
+            if not isinstance(function, dict) or not isinstance(function.get("name"), str) or not function["name"].strip() or not isinstance(function.get("arguments"), dict):
+                raise ValueError("Tool function needs a name and an arguments object")
+        return calls
 
     def as_assistant_message(self):
         message = {"role": "assistant", "content": self.content}
@@ -26,6 +35,7 @@ class OllamaClient:
         self.settings = settings
         self._http = httpx.Client(base_url=settings.model_base_url, timeout=settings.model_timeout_s, transport=transport, trust_env=False, follow_redirects=False)
         self._metadata = None
+        self.calls = []
 
     def __enter__(self):
         return self
@@ -49,13 +59,18 @@ class OllamaClient:
             return self._metadata
         version = self._request("/api/version")
         tags = self._request("/api/tags")
-        model = next((m for m in tags.get("models", []) if m.get("name") == self.settings.model_name or m.get("model") == self.settings.model_name), None)
+        models = tags.get("models")
+        if not isinstance(version.get("version"), str) or not isinstance(models, list) or any(not isinstance(m, dict) or not isinstance(m.get("details", {}), dict) for m in models):
+            raise ModelError("Malformed runtime version/model inventory")
+        model = next((m for m in models if m.get("name") == self.settings.model_name or m.get("model") == self.settings.model_name), None)
         if model is None:
             raise DependencyError(f"Local model {self.settings.model_name} is not downloaded")
         info = self._request("/api/show", {"model": self.settings.model_name})
         if any(info.get(k) or model.get(k) for k in ("remote_host", "remote_model")) or "cloud" in json_text(model).lower():
             raise DependencyError("Cloud-backed models cannot receive case data")
         capabilities = info.get("capabilities", [])
+        if not isinstance(capabilities, list) or any(not isinstance(c, str) for c in capabilities) or not isinstance(info.get("template"), str) or not isinstance(model.get("digest"), str):
+            raise ModelError("Malformed model capabilities/digest/template")
         if "tools" not in capabilities or not model.get("digest") or not info.get("template"):
             raise DependencyError("Model must advertise tools and have a local digest/template")
         self._metadata = {"runtime_version": version.get("version"), "model": self.settings.model_name,
@@ -79,8 +94,10 @@ class OllamaClient:
         if body.get("done") is not True or not isinstance(message, dict) or message.get("role") != "assistant":
             raise ModelError("Incomplete or malformed assistant response")
         try:
-            return ModelTurn(content=message.get("content", ""), tool_calls=message.get("tool_calls") or [],
+            turn = ModelTurn(content=message.get("content", ""), tool_calls=message.get("tool_calls", []),
                              metrics={k: body[k] for k in ("total_duration", "load_duration", "prompt_eval_count", "prompt_eval_duration", "eval_count", "eval_duration") if k in body})
+            self.calls.append({"sequence": len(self.calls) + 1, "mode": "tools" if tools else "structured" if schema else "text", "metrics": turn.metrics})
+            return turn
         except ValueError as exc:
             raise ModelError("Malformed assistant content/tool calls") from exc
 

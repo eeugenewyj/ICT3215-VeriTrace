@@ -15,6 +15,7 @@ from .evidence.index import EvidenceIndex
 from .parsers.base import CoverageEntry
 from .parsers.edge import EdgeAdapter
 from .parsers.runner import ParserRunner
+from .parsers.pins import pinned_command
 from .parsers.windows import WindowsCsvAdapter
 from .parsers.userassist import UserAssistAdapter
 from .report.models import RunResult
@@ -46,11 +47,7 @@ def build_adapters(settings):
             if sample.get("verified") is not True or not sample.get("source_sha256") or not sample.get("comparison_record"):
                 raise DependencyError(f"{family}: acquired-sample comparison not recorded")
             hashes = profile.get("command_hashes", {})
-            if not hashes or any(not Path(p).is_file() or sha256_file(Path(p)) != h for p, h in hashes.items()):
-                raise DependencyError(f"{family}: parser executable/source hashes missing or changed")
-            for part in command:
-                if Path(part).is_file() and str(Path(part).resolve()) not in hashes:
-                    raise DependencyError(f"{family}: command file is not pinned")
+            command = pinned_command(command, hashes)
             if family == "edge_history" and profile.get("schema") == "hindsight-history-2026.06-v1":
                 adapters[family] = EdgeAdapter(command, profile["version"], settings.parser_config_hashes[family], runner=ParserRunner(settings.parser_timeout_s, version=profile["version"], config_sha256=settings.parser_config_hashes[family]))
             elif family in ("lnk", "jumplist", "prefetch", "recyclebin") and profile.get("schema") == "zimmerman-csv-source-v1":
@@ -116,7 +113,7 @@ def run_case(input_dir: Path, output_dir: Path, settings, *, client=None, budget
         assessments, records = [], []
         errors.append({"code": exc.code, "message": str(exc)})
     status = "error" if errors else "partial" if claim_errors or any(c.status == "failed" for c in coverage) else "complete"
-    runtime = {"model": metadata, "settings": settings.model_dump(mode="json"), "prompt_hashes": {name: hashlib.sha256(load_prompt(name).encode()).hexdigest() for name in ("claims", "verify")}, "duration_s": time.perf_counter() - started, "enabled_families": settings.enabled_families, "gpu_backend": "unknown; retain desktop benchmark logs", "interpretation": "Available-evidence assessment; investigator makes final decision"}
+    runtime = {"case_metadata": case.manifest.model_dump(mode="json", exclude={"items"}), "model_calls": getattr(client, "calls", None), "resource_measurements": "unknown; collect host observations during the desktop benchmark", "model": metadata, "settings": settings.model_dump(mode="json"), "prompt_hashes": {name: hashlib.sha256(load_prompt(name).encode()).hexdigest() for name in ("claims", "verify")}, "duration_s": time.perf_counter() - started, "enabled_families": settings.enabled_families, "gpu_backend": "unknown; retain desktop benchmark logs", "interpretation": "Available-evidence assessment; investigator makes final decision"}
     names = ("report.html", "claims.json", "assessments.json", "coverage.json", "run.json", "tool_calls.jsonl", "evidence.sqlite", "registration.json")
     result = RunResult(run_id="run_" + uuid.uuid4().hex[:20], case_id=case.manifest.case_id, testimony=case.testimony, testimony_sha256=case.testimony_sha256, status=status, claims=claims, assessments=assessments, claim_errors=claim_errors, errors=errors, coverage=coverage, records=records, tool_receipts=ledger.entries, runtime_metadata=runtime, output_paths={n: str(case.working_root / n) for n in names})
     for name, values in (("claims", claims), ("assessments", assessments), ("coverage", coverage)):

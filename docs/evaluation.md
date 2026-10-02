@@ -14,6 +14,16 @@ anchors; generated IDs are not assumed to match the labels. Optional action,
 target, negation and known relevant record IDs support separate field/retrieval
 measurements.
 
+Alignment is one-to-one. For multiple atomic claims sharing the same source span
+and action, labels may specify atomic_index (zero-based order within that group).
+Without an unambiguous occurrence mapping, labels count as operational errors;
+one generated claim cannot satisfy several labels. Review this order against
+the extracted claims during development and freeze it before held-out runs.
+Target/negation values measure field correctness and are not used to select a
+more favorable prediction. Failed cases contribute zero retrieved records and
+remain in the known-relevant denominator. All output/input relationships across
+the corpus are checked before any output directory is created.
+
 ```powershell
 uv run veritrace evaluate --config veritrace.local.toml --corpus .cases/labels.json --output .runs/evaluation01
 ```

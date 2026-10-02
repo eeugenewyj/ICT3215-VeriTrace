@@ -50,6 +50,6 @@ class EvidenceRecord(FrozenModel):
     limitations: list[str] = Field(default_factory=list)
 
 
-def stable_record_id(case_id, family, source_sha256, locator):
-    identity = {"case_id": case_id, "family": family, "source_sha256": source_sha256, "locator": locator.model_dump(mode="json")}
+def stable_record_id(case_id, family, source_sha256, locator, *, item_id):
+    identity = {"case_id": case_id, "family": family, "item_id": item_id, "source_sha256": source_sha256, "locator": locator.model_dump(mode="json")}
     return hashlib.sha256(json.dumps(identity, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
