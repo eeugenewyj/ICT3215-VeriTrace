@@ -12,3 +12,4 @@ veritrace.local.toml
 build/
 dist/
 *.egg-info/
+venv/
