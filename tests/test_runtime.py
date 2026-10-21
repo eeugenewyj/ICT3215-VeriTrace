@@ -1,0 +1,172 @@
+import json
+from types import SimpleNamespace
+
+import httpx
+import pytest
+
+
+def server(mode="ok"):
+    requests = []
+    def handle(request):
+        data = json.loads(request.content) if request.content else {}
+        requests.append((request.url.path, data))
+        if mode == "timeout":
+            raise httpx.ReadTimeout("timed out", request=request)
+        if request.url.path == "/api/version":
+            body = {"version": "test-1"}
+        elif request.url.path == "/api/tags":
+            body = {"models": [] if mode == "missing" else [{"name": "qwen3:8b", "digest": "abc", "details": {"quantization_level": "Q4_K_M"}}]}
+        elif request.url.path == "/api/show":
+            body = {"capabilities": ["completion", "tools", "thinking"], "template": "synthetic template", "details": {}}
+            if mode == "cloud":
+                body["remote_host"] = "https://cloud.example"
+        else:
+            body = {"message": {"role": "assistant", "content": "", "thinking": "private", "tool_calls": [{"function": {"name": "get_source_coverage", "arguments": {"case_id": "case01"}}}]}, "done": True, "prompt_eval_count": 12, "eval_count": 3}
+        return httpx.Response(200, json=body)
+    return SimpleNamespace(transport=httpx.MockTransport(handle), requests=requests)
+
+
+def test_chat_payload_and_tool_calls():
+    from veritrace.settings import Settings
+    from veritrace.runtime.client import OllamaClient
+    mock = server()
+    with OllamaClient(Settings(), transport=mock.transport) as client:
+        turn = client.chat([{"role": "user", "content": "case"}], tools=[], schema={"type": "object"})
+    payload = next(body for path, body in mock.requests if path == "/api/chat")
+    assert payload["stream"] is False
+    assert payload["format"] == {"type": "object"}
+    assert payload["think"] is False
+    assert turn.tool_calls[0]["function"]["name"] == "get_source_coverage"
+    assert "thinking" not in turn.as_assistant_message()
+
+
+@pytest.mark.parametrize("mode", ["missing", "cloud", "timeout"])
+def test_unusable_model_rejected_before_case_prompt(mode):
+    from veritrace.settings import Settings
+    from veritrace.runtime.client import OllamaClient
+    from veritrace.errors import VeriTraceError
+    mock = server(mode)
+    with OllamaClient(Settings(), transport=mock.transport) as client:
+        with pytest.raises(VeriTraceError):
+            client.chat([{"role": "user", "content": "secret testimony"}])
+    assert not any(path == "/api/chat" for path, _ in mock.requests)
+
+
+def test_budget_requires_matching_verified_profile(tmp_path):
+    from veritrace.runtime.budget import ContextBudget
+    from veritrace.errors import ContextLimitError
+    from veritrace.settings import Settings
+    metadata = {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
+    with pytest.raises(ContextLimitError):
+        ContextBudget(Settings(), metadata).ensure([], None, None)
+    path = tmp_path / "budget.json"
+    path.write_text(json.dumps({"verified": True, "protocol": "native-tools-then-json-v1", "method": "utf8-upper-bound-v1", "num_ctx": 4096, **metadata}), encoding="utf-8")
+    budget = ContextBudget(Settings(budget_profile=path), metadata)
+    budget.ensure([{"role": "user", "content": "résumé"}], None, None)
+    with pytest.raises(ContextLimitError):
+        budget.ensure([{"role": "user", "content": "a" * 4000}], None, None)
+    with pytest.raises(ContextLimitError):
+        ContextBudget(Settings(budget_profile=path), {**metadata, "digest": "changed"}).ensure([], None, None)
+
+
+def test_benchmark_only_passes_after_real_tool_return():
+    from veritrace.runtime.benchmark import benchmark
+    from veritrace.runtime.client import ModelTurn
+    from veritrace.runtime.budget import ContextBudget
+    from veritrace.settings import Settings
+    class Client:
+        settings = Settings()
+        def metadata(self):
+            return {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
+        def chat(self, messages, *, tools=None, schema=None):
+            if tools:
+                if any(m["role"] == "tool" for m in messages):
+                    return ModelTurn(content="Ready to finalize")
+                return ModelTurn(tool_calls=[{"function": {"name": "get_benchmark_fact", "arguments": {"case_id": "benchmark"}}}])
+            result = json.loads(next(m["content"] for m in messages if m["role"] == "tool"))
+            return ModelTurn(content=json.dumps(result), metrics={"prompt_eval_count": 20})
+    client = Client()
+    result = benchmark(client, ContextBudget(client.settings, client.metadata()), trials=3)
+    assert result["tool_check_passed"] is True
+    assert len(result["trials"]) == 3
+    assert all(t["receipt"]["executed"] and t["final"]["nonce"] == t["receipt"]["result"]["nonce"] for t in result["trials"])
+    assert len({t["final"]["nonce"] for t in result["trials"]}) == 3
+
+
+def test_benchmark_exercises_retrieval_stop_and_schema_only_finalization():
+    from veritrace.runtime.benchmark import benchmark
+    from veritrace.runtime.client import ModelTurn
+    from veritrace.runtime.budget import ContextBudget
+    from veritrace.settings import Settings
+    class Client:
+        settings = Settings()
+        def __init__(self):
+            self.requests = []
+        def metadata(self):
+            return {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
+        def chat(self, messages, *, tools=None, schema=None):
+            self.requests.append({"messages": messages, "tools": tools, "schema": schema})
+            if tools:
+                if any(m["role"] == "tool" for m in messages):
+                    return ModelTurn(content="Ready to finalize", metrics={"prompt_eval_count": 20})
+                return ModelTurn(tool_calls=[{"function": {"name": "get_benchmark_fact", "arguments": {"case_id": "benchmark"}}}], metrics={"prompt_eval_count": 20})
+            tool_results = [m for m in messages if m["role"] == "tool"]
+            if tool_results:
+                return ModelTurn(content=tool_results[-1]["content"], metrics={"prompt_eval_count": 20})
+            # Probes fail intentionally: they do not bypass measured retention checks.
+            return ModelTurn(content='{"nonce":"wrong"}', metrics={"prompt_eval_count": 20})
+    client = Client()
+    value = benchmark(client, ContextBudget(client.settings, client.metadata()), trials=3)
+    assert value["tool_check_passed"]
+    assert not value["passed"]
+    assert all("retrieval_stop_metrics" in t for t in value["trials"])
+    assert all(not (r["tools"] and r["schema"]) for r in client.requests)
+
+
+def test_missing_tool_stage_counts_cannot_validate_a_budget_profile():
+    from veritrace.runtime.benchmark import benchmark
+    from veritrace.runtime.client import ModelTurn
+    from veritrace.runtime.budget import ContextBudget
+    from veritrace.settings import Settings
+    class Client:
+        settings = Settings()
+        def metadata(self):
+            return {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
+        def chat(self, messages, *, tools=None, schema=None):
+            if tools and not any(m["role"] == "tool" for m in messages):
+                return ModelTurn(tool_calls=[{"function": {"name": "get_benchmark_fact", "arguments": {"case_id": "benchmark"}}}])
+            if tools:
+                return ModelTurn(content="Ready")
+            tool_results = [m for m in messages if m["role"] == "tool"]
+            if tool_results:
+                return ModelTurn(content=tool_results[-1]["content"], metrics={"prompt_eval_count": 20})
+            import re
+            nonce = re.search(r"nonce as JSON: ([0-9a-f]+)", messages[-1]["content"]).group(1)
+            return ModelTurn(content=json.dumps({"nonce": nonce}), metrics={"prompt_eval_count": 20})
+    client = Client()
+    value = benchmark(client, ContextBudget(client.settings, client.metadata()), trials=3)
+    assert value["tool_check_passed"]
+    assert not value["budget_profile"]["verified"]
+
+
+def test_tokenizer_profile_is_bound_to_actual_vocabulary(tmp_path):
+    import hashlib
+    from tokenizers import Tokenizer, models, pre_tokenizers
+    from veritrace.settings import Settings
+    from veritrace.runtime.budget import ContextBudget
+    from veritrace.errors import ContextLimitError
+    tokenizer = Tokenizer(models.WordLevel({"[UNK]": 0, "hello": 1}, unk_token="[UNK]"))
+    tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
+    path = tmp_path / "tokenizer.json"
+    tokenizer.save(str(path))
+    metadata = {"digest": "abc", "template_sha256": "def", "runtime_version": "v1"}
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps({"method": "tokenizer-json-upper-bound-v1", "protocol": "native-tools-then-json-v1", "verified": True, "num_ctx": 4096, "tokenizer_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), **metadata}))
+    settings = Settings(tokenizer_path=path, budget_profile=profile)
+    budget = ContextBudget(settings, metadata)
+    budget.ensure([{"role": "user", "content": "hello " * 100}], None, None)
+    with pytest.raises(ContextLimitError):
+        budget.ensure([{"role": "user", "content": "hello " * 4000}], None, None)
+    path.write_text(path.read_text() + " ")
+    with pytest.raises(ContextLimitError):
+        ContextBudget(settings, metadata).ensure([], None, None)

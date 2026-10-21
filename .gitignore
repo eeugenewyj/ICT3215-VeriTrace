@@ -1,0 +1,15 @@
+.venv/
+.uv-cache/
+.external/
+.cases/
+.runs/
+.superpowers/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.env
+veritrace.local.toml
+build/
+dist/
+*.egg-info/
+venv/
