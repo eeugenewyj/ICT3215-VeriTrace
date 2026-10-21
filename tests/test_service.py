@@ -1,6 +1,6 @@
 import json
 
-from tests.factories import write_case, make_claim
+from tests.factories import write_case, make_claim, draft_payload
 from tests.fakes import ReplayClient, TestBudget
 from tests.test_verification import call, verdict, finished
 
@@ -39,7 +39,7 @@ def test_service_exports_genuine_dispatch_receipts_and_cited_records(tmp_path):
             record = make_record(raw_output_locator={"path": "raw/test.jsonl", "line": 1, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
             return ExtractionResult(records=[record], coverage=[CoverageEntry(item_id="history01", family="edge_history", status="parsed", record_count=1)])
     from veritrace.runtime.client import ModelTurn
-    client = Client([ModelTurn(content=json.dumps({"claims": [make_claim().model_dump(mode="json")]})), call("extract_case", {"case_id": "case01"}), call("search_records", {"case_id": "case01", "filters": {}, "cursor": None}), finished(), verdict()])
+    client = Client([ModelTurn(content=json.dumps({"claims": [draft_payload(make_claim())]})), call("extract_case", {"case_id": "case01"}), call("search_records", {"case_id": "case01", "filters": {}, "cursor": None}), finished(), verdict()])
     source = write_case(tmp_path)
     result = run_case(source, tmp_path / "output", Settings(), client=client, budget=TestBudget(), adapters={"edge_history": Adapter()})
     assert result.status == "complete"

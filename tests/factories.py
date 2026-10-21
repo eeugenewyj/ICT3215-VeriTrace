@@ -23,3 +23,8 @@ def make_record(case_id="case01", **overrides):
     from veritrace.evidence.models import EvidenceRecord, SourceLocator
     values = {"record_id": hashlib.sha256(b"synthetic-record").hexdigest(), "case_id": case_id, "family": "edge_history", "item_id": "history01", "source_sha256": hashlib.sha256(b"synthetic SQLite placeholder").hexdigest(), "original_path": "C:\\Users\\Victim\\History", "locator": SourceLocator(kind="sqlite", identifiers={"table": "downloads", "id": 7}), "times": [], "application": "Edge", "target": "report.pdf", "parser": {"name": "synthetic", "version": "1", "config_sha256": "0" * 64}, "raw_fields": {"id": 7}, "raw_output_locator": {"path": "raw/test.jsonl", "line": 1, "sha256": "0" * 64}, "limitations": []}
     return EvidenceRecord(**(values | overrides))
+
+
+def draft_payload(claim, occurrence=1):
+    """JSON for one claim as Agent 1 returns it: the sentence and occurrence, no offsets."""
+    return claim.model_dump(mode="json", exclude={"start", "end"}) | {"occurrence": occurrence}

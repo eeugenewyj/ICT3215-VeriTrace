@@ -35,6 +35,38 @@ class Claim(FrozenModel):
         return self
 
 
+class ClaimDraft(FrozenModel):
+    """What Agent 1 returns. It names the source sentence; the host computes its span."""
+    claim_id: SafeId
+    sentence: str
+    occurrence: int = Field(default=1, ge=1, strict=True)
+    action: str
+    target: str | None
+    actor: str | None
+    negated: bool = Field(strict=True)
+    time_expression: str | None
+    resolved_start: datetime | None
+    resolved_end: datetime | None
+    uncertainty: list[str]
+    interpretation_notes: list[str]
+
+    @field_validator("resolved_start", "resolved_end")
+    @classmethod
+    def aware_bounds(cls, value):
+        if value is not None and value.utcoffset() is None:
+            raise ValueError("Resolved claim bounds must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def ordered_bounds(self):
+        if self.resolved_start and self.resolved_end and self.resolved_end < self.resolved_start:
+            raise ValueError("Claim time bounds are invalid")
+        return self
+
+    def to_claim(self, start, end):
+        return Claim(**self.model_dump(exclude={"occurrence"}), start=start, end=end)
+
+
 class Assessment(FrozenModel):
     claim_id: SafeId
     status: Literal["supported", "contradicted", "unverified", "inconclusive"]

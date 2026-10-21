@@ -4,7 +4,7 @@ import shutil
 import httpx
 import pytest
 
-from tests.factories import make_claim, write_case
+from tests.factories import make_claim, write_case, draft_payload
 from tests.fakes import ReplayClient, TestBudget
 from tests.test_edge import ExportRunner, edge_case
 from tests.test_tools import backend
@@ -91,7 +91,7 @@ def test_malformed_nested_tool_call_produces_error_report(tmp_path, stage):
     from veritrace.runtime.client import OllamaClient
     from veritrace.service import run_case
     from veritrace.settings import Settings
-    turns = [{"role": "assistant", "content": json.dumps({"claims": [make_claim().model_dump(mode="json")]})}]
+    turns = [{"role": "assistant", "content": json.dumps({"claims": [draft_payload(make_claim())]})}]
     if stage == "claim":
         turns.append({"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "extract_case", "arguments": {"case_id": "case01"}}}]})
     turns.append({"role": "assistant", "content": "", "tool_calls": [{"function": None}]})
