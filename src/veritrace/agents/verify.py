@@ -6,7 +6,8 @@ from ..errors import CitationError, IntegrityError, ModelError, VeriTraceError, 
 from .claims import compact_schema, load_prompt
 from .citations import validate_citations
 from .models import Assessment, VerificationResult
-from .tools import tool_definitions
+from .timecheck import time_conflict
+from .tools import compact_coverage, model_view, tool_definitions
 
 
 def execute_request(turn, tools, *, claim_id):
@@ -20,7 +21,7 @@ def execute_request(turn, tools, *, claim_id):
             raise
         except VeriTraceError as exc:
             result = {"error": {"code": exc.code, "message": str(exc)}}
-        responses.append({"role": "tool", "tool_name": name, "content": json.dumps(result, ensure_ascii=False, separators=(",", ":"))})
+        responses.append({"role": "tool", "tool_name": name, "content": json.dumps(model_view(name, result), ensure_ascii=False, separators=(",", ":"))})
     return responses
 
 
@@ -43,10 +44,11 @@ def require_extraction(case, client, budget, tools):
 def verify_claims(case, claims, client, budget, tools):
     require_extraction(case, client, budget, tools)
     assessments, errors = [], {}
-    definitions = tool_definitions(case.manifest.case_id)
+    # extract_case already ran; leaving its definition out saves context the small model needs.
+    definitions = tool_definitions(case.manifest.case_id, ["search_records", "get_record", "get_source_coverage"])
     schema = compact_schema(Assessment.model_json_schema())
     for claim in claims:
-        messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "claim": claim.model_dump(mode="json"), "coverage": [c.model_dump(mode="json") for c in tools.coverage]}, ensure_ascii=False, separators=(",", ":"))}]
+        messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "source_timezone": case.manifest.source_timezone, "claim": claim.model_dump(mode="json"), "coverage": compact_coverage(tools.coverage)}, ensure_ascii=False, separators=(",", ":"))}]
         count, repairs, missing_search = 0, 0, 0
         try:
             while True:
@@ -78,6 +80,11 @@ def verify_claims(case, claims, client, budget, tools):
                     if claim.action not in ("download_file", "open_document", "launch_program", "recycle_file") and assessment.status in ("supported", "contradicted"):
                         raise CitationError("Action outside prototype coverage cannot receive a positive assessment")
                     validate_citations(case, assessment, tools.index, tools.ledger)
+                    if assessment.status == "supported":
+                        cited = [tools.index.get(case.manifest.case_id, rid) for rid in assessment.cited_record_ids]
+                        problem = time_conflict(claim, cited, case.manifest.source_timezone)
+                        if problem:
+                            assessment = assessment.model_copy(update={"status": "inconclusive", "justification": f"{assessment.justification} Host time check: {problem}, so 'supported' was withheld.", "limitations": [*assessment.limitations, "Status changed from supported to inconclusive by the host time check"]})
                     assessments.append(assessment)
                     break
                 except (ValueError, ValidationError, CitationError) as exc:
