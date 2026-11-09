@@ -26,6 +26,10 @@ class ContextLimitError(ModelError):
     code = "context_limit"
 
 
+class ContextOverflowError(ContextLimitError):
+    """The request is too big for the window (as opposed to a missing or mismatched budget profile)."""
+
+
 class WorkflowError(VeriTraceError):
     code = "workflow_error"
 

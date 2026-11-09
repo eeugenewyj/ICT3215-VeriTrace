@@ -1,5 +1,6 @@
 import json
 import time
+from datetime import timezone
 from typing import Any
 
 from pydantic import Field, ValidationError
@@ -8,8 +9,10 @@ from ..cases.models import FrozenModel, SafeId
 from ..errors import InputError, VeriTraceError, WorkflowError
 from ..evidence.index import SearchFilters
 from ..evidence.models import EvidenceRecord
+from ..parsers.base import CoverageEntry
 from ..parsers.coverage import extract_case, extraction_key
 from .claims import compact_schema
+from .hints import coverage_view
 
 
 class ToolReceipt(FrozenModel):
@@ -60,7 +63,7 @@ ARGUMENTS = {"extract_case": CaseArgs, "search_records": SearchArgs, "get_record
 # compact_schema, so the guidance lives here.
 DESCRIPTIONS = {
     "extract_case": "Parse the registered case evidence into records. Already done before claims are assessed.",
-    "search_records": "Search evidence records; filters are optional and combine with AND. family: for example edge_history. target: substring of the file name, path or URL (a distinctive word such as sample or .pdf, never a pronoun). account. start and end: ISO-8601 with timezone. time_role: an exact role such as download_started or visit_time, never a clock time. There is no action filter. Use limit 5. Times are UTC.",
+    "search_records": "Search evidence records; filters are optional and combine with AND. family: edge_history (downloads, page visits), lnk (files opened), recyclebin (files deleted), jumplist, prefetch or userassist (programs run). target: substring of the file name, path or URL (a distinctive word such as sample or .pdf, never a pronoun). account. start and end: ISO-8601 with timezone. time_role: an exact role such as download_started, visit_time, target_file_accessed or recycle_bin_deletion, never a clock time. There is no action filter. Use limit 5. Times are UTC.",
     "get_record": "Fetch one full record by the record_id returned from a search.",
     "get_source_coverage": "List which evidence sources were parsed, unsupported or failed.",
 }
@@ -97,7 +100,7 @@ def compact_record(record):
     # for a second search (context_limit). Fields the model cannot use are left out of its view;
     # the full record stays in the index and is returned by get_record.
     out = {"record_id": record.record_id, "family": record.family, "target": record.target,
-           "times": [{"role": t.role, "utc": t.normalized_utc.isoformat() if t.normalized_utc else None, **({"uncertainty": t.uncertainty} if t.uncertainty else {})} for t in record.times]}
+           "times": [{"role": t.role, "utc": t.normalized_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if t.normalized_utc else None, **({"uncertainty": t.uncertainty} if t.uncertainty else {})} for t in record.times]}
     notes = [n for n in record.limitations if n not in GENERIC_LIMITATIONS]
     if notes:
         out["limitations"] = notes
@@ -123,6 +126,9 @@ def record_details(record):
 def model_view(name, result):
     """What the model reads. Regression: a full get_record result (~1,400 tokens of raw parser
     fields) overflowed the 4096-token budget. The ledger keeps the complete result for audit."""
+    if name == "get_source_coverage" and "coverage" in result:
+        # Already in the claim message in this form; the 6-family table in full cost ~300 tokens.
+        return coverage_view([CoverageEntry.model_validate(c) for c in result["coverage"]])
     if name != "get_record" or "record_id" not in result:
         return result
     record = EvidenceRecord.model_validate(result)
