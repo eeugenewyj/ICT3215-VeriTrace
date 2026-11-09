@@ -1,0 +1,188 @@
+{
+  "run_id": "run_88b71236f36846359c71",
+  "case_id": "ccleaner_case",
+  "testimony": "I opened Microsoft Edge at 3:11 pm, the Photos app at 3:12 pm, and I have never run CCleaner or any wiping software on this computer.",
+  "testimony_sha256": "ea992191b27b40453e64e898a824c40eb93da266dc5a7b94f66e14e8c329605b",
+  "status": "error",
+  "claims": [],
+  "assessments": [],
+  "claim_errors": {},
+  "errors": [
+    {
+      "code": "context_limit",
+      "message": "Request exceeds the conservative context budget; narrow input or benchmark a larger context"
+    }
+  ],
+  "coverage": [
+    {
+      "item_id": "ntuser01",
+      "family": "userassist",
+      "status": "failed",
+      "record_count": 0,
+      "companion_handling": [],
+      "reason": "Not processed; inspect run errors",
+      "error_code": null
+    },
+    {
+      "item_id": "unknown_c3e3feea4d7d916b5c7e0bcb",
+      "family": "unknown",
+      "status": "unsupported",
+      "record_count": 0,
+      "companion_handling": [],
+      "reason": "Family outside enabled coverage",
+      "error_code": null
+    },
+    {
+      "item_id": "unknown_f23dbe79d03c5dceffbc3cf6",
+      "family": "unknown",
+      "status": "unsupported",
+      "record_count": 0,
+      "companion_handling": [],
+      "reason": "Family outside enabled coverage",
+      "error_code": null
+    },
+    {
+      "item_id": null,
+      "family": "edge_history",
+      "status": "unavailable-in-input",
+      "record_count": 0,
+      "companion_handling": [],
+      "reason": "No source supplied",
+      "error_code": null
+    },
+    {
+      "item_id": null,
+      "family": "lnk",
+      "status": "unsupported",
+      "record_count": 0,
+      "companion_handling": [],
+      "reason": "Family outside enabled coverage",
+      "error_code": null
+    },
+    {
+      "item_id": null,
+      "family": "jumplist",
+      "status": "unsupported",
+      "record_count": 0,
+      "companion_handling": [],
+      "reason": "Family outside enabled coverage",
+      "error_code": null
+    },
+    {
+      "item_id": null,
+      "family": "prefetch",
+      "status": "unsupported",
+      "record_count": 0,
+      "companion_handling": [],
+      "reason": "Family outside enabled coverage",
+      "error_code": null
+    },
+    {
+      "item_id": null,
+      "family": "recyclebin",
+      "status": "unsupported",
+      "record_count": 0,
+      "companion_handling": [],
+      "reason": "Family outside enabled coverage",
+      "error_code": null
+    }
+  ],
+  "records": [],
+  "tool_receipts": [],
+  "runtime_metadata": {
+    "case_metadata": {
+      "schema_version": 1,
+      "case_id": "ccleaner_case",
+      "acquisition": {
+        "description": "UserAssist registry acquisition",
+        "tool": "FTK Imager",
+        "version": "4.7.1",
+        "collection_started": null,
+        "collection_finished": null,
+        "snapshot_id": null
+      },
+      "windows": {
+        "edition": "Windows 10 Pro",
+        "build": null
+      },
+      "edge": {
+        "version": null,
+        "profile": "Default"
+      },
+      "security": {
+        "disk_encryption": null,
+        "verification_time": null
+      },
+      "testimony_reference_time": null,
+      "source_timezone": "Asia/Singapore",
+      "collection_omissions": []
+    },
+    "model_calls": [
+      {
+        "sequence": 1,
+        "mode": "structured",
+        "metrics": {
+          "total_duration": 49937164800,
+          "load_duration": 4693231800,
+          "prompt_eval_count": 381,
+          "prompt_eval_duration": 2941393000,
+          "eval_count": 535,
+          "eval_duration": 42297802000
+        }
+      }
+    ],
+    "resource_measurements": "unknown; collect host observations during the desktop benchmark",
+    "model": {
+      "runtime_version": "0.40.15",
+      "model": "qwen3:8b",
+      "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+      "quantization": "Q4_K_M",
+      "template_sha256": "ae370d884f108d16e7cc8fd5259ebc5773a0afa6e078b11f4ed7e39a27e0dfc4",
+      "capabilities": [
+        "completion",
+        "tools",
+        "thinking"
+      ],
+      "think": false
+    },
+    "settings": {
+      "model_base_url": "http://127.0.0.1:11434",
+      "model_name": "qwen3:8b",
+      "num_ctx": 4096,
+      "temperature": 0.1,
+      "model_timeout_s": 120.0,
+      "parser_timeout_s": 120.0,
+      "parser_commands": {},
+      "parser_versions": {},
+      "parser_config_hashes": {},
+      "parser_profiles": {},
+      "enabled_families": [
+        "edge_history",
+        "userassist"
+      ],
+      "budget_profile": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\.runs\\benchmark.budget.json",
+      "tokenizer_path": null
+    },
+    "prompt_hashes": {
+      "claims": "899e4570d4faa3a95978dd571be71f4ba1697eea6c3b8cbf8984a80d6867f01c",
+      "verify": "59228dc7318222401ad7222073e0bdc697113b39262a57befc4a54e4fa5ba7aa"
+    },
+    "duration_s": 50.39736809999886,
+    "enabled_families": [
+      "edge_history",
+      "userassist"
+    ],
+    "gpu_backend": "unknown; retain desktop benchmark logs",
+    "interpretation": "Available-evidence assessment; investigator makes final decision"
+  },
+  "output_paths": {
+    "report.html": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\reports\\ccleaner_final\\report.html",
+    "claims.json": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\reports\\ccleaner_final\\claims.json",
+    "assessments.json": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\reports\\ccleaner_final\\assessments.json",
+    "coverage.json": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\reports\\ccleaner_final\\coverage.json",
+    "run.json": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\reports\\ccleaner_final\\run.json",
+    "tool_calls.jsonl": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\reports\\ccleaner_final\\tool_calls.jsonl",
+    "evidence.sqlite": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\reports\\ccleaner_final\\evidence.sqlite",
+    "registration.json": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\reports\\ccleaner_final\\registration.json"
+  }
+}

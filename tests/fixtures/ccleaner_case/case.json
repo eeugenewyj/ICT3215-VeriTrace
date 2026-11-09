@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "case_id": "ccleaner_case",
+  "acquisition": {
+    "description": "UserAssist registry acquisition",
+    "tool": "FTK Imager",
+    "version": "4.7.1",
+    "collection_started": null,
+    "collection_finished": null,
+    "snapshot_id": null
+  },
+  "windows": {"edition": "Windows 10 Pro", "build": null},
+  "edge": {"version": null, "profile": "Default"},
+  "security": {"disk_encryption": null, "verification_time": null},
+  "source_timezone": "Asia/Singapore",
+  "testimony_reference_time": null,
+  "items": [
+    {
+      "item_id": "ntuser01",
+      "family": "userassist",
+      "acquired_path": "NTUSER.DAT",
+      "original_path": "C:\\Users\\Victim\\NTUSER.DAT",
+      "account": null,
+      "sid": null,
+      "supplied_sha256": null
+    }
+  ],
+  "collection_omissions": []
+}

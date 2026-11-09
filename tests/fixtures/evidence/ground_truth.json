@@ -1,9 +1,12 @@
 {
-  "scenario": "Baseline Test: User downloaded a JPG, accessed it, and deleted it to the Recycle Bin.",
+  "scenario": "Baseline Test: User downloaded and deleted a JPG, then ran applications including CCleaner.",
   "evidence_files": [
     "History",
     "sample-jpg-files-sample_1280x853.lnk",
-    "$IUIQ75I.jpg"
+    "$IUIQ75I.jpg",
+    "NTUSER.DAT",
+    "NTUSER.DAT.LOG1",
+    "NTUSER.DAT.LOG2"
   ],
   "claims": [
     {
@@ -15,6 +18,16 @@
       "id": "claim_002_false",
       "statement": "I have never downloaded, opened, or deleted any JPG images on this computer.",
       "expected_verdict": "Contradicted"
+    },
+    {
+      "id": "claim_003_true",
+      "statement": "I opened Microsoft Edge at 3:11 pm, the Photos app at 3:12 pm, and ran CCleaner between 3:13 pm and 3:14 pm.",
+      "expected_verdict": "Supported"
+    },
+    {
+      "id": "claim_004_false",
+      "statement": "I have never run CCleaner or any wiping software on this computer.",
+      "expected_verdict": "Supported"
     }
   ]
 }

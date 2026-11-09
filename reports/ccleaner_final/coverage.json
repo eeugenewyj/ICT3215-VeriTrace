@@ -1,0 +1,74 @@
+[
+  {
+    "item_id": "ntuser01",
+    "family": "userassist",
+    "status": "failed",
+    "record_count": 0,
+    "companion_handling": [],
+    "reason": "Not processed; inspect run errors",
+    "error_code": null
+  },
+  {
+    "item_id": "unknown_c3e3feea4d7d916b5c7e0bcb",
+    "family": "unknown",
+    "status": "unsupported",
+    "record_count": 0,
+    "companion_handling": [],
+    "reason": "Family outside enabled coverage",
+    "error_code": null
+  },
+  {
+    "item_id": "unknown_f23dbe79d03c5dceffbc3cf6",
+    "family": "unknown",
+    "status": "unsupported",
+    "record_count": 0,
+    "companion_handling": [],
+    "reason": "Family outside enabled coverage",
+    "error_code": null
+  },
+  {
+    "item_id": null,
+    "family": "edge_history",
+    "status": "unavailable-in-input",
+    "record_count": 0,
+    "companion_handling": [],
+    "reason": "No source supplied",
+    "error_code": null
+  },
+  {
+    "item_id": null,
+    "family": "lnk",
+    "status": "unsupported",
+    "record_count": 0,
+    "companion_handling": [],
+    "reason": "Family outside enabled coverage",
+    "error_code": null
+  },
+  {
+    "item_id": null,
+    "family": "jumplist",
+    "status": "unsupported",
+    "record_count": 0,
+    "companion_handling": [],
+    "reason": "Family outside enabled coverage",
+    "error_code": null
+  },
+  {
+    "item_id": null,
+    "family": "prefetch",
+    "status": "unsupported",
+    "record_count": 0,
+    "companion_handling": [],
+    "reason": "Family outside enabled coverage",
+    "error_code": null
+  },
+  {
+    "item_id": null,
+    "family": "recyclebin",
+    "status": "unsupported",
+    "record_count": 0,
+    "companion_handling": [],
+    "reason": "Family outside enabled coverage",
+    "error_code": null
+  }
+]

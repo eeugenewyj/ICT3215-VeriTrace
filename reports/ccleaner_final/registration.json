@@ -1,0 +1,75 @@
+{
+  "manifest": {
+    "schema_version": 1,
+    "case_id": "ccleaner_case",
+    "acquisition": {
+      "description": "UserAssist registry acquisition",
+      "tool": "FTK Imager",
+      "version": "4.7.1",
+      "collection_started": null,
+      "collection_finished": null,
+      "snapshot_id": null
+    },
+    "windows": {
+      "edition": "Windows 10 Pro",
+      "build": null
+    },
+    "edge": {
+      "version": null,
+      "profile": "Default"
+    },
+    "security": {
+      "disk_encryption": null,
+      "verification_time": null
+    },
+    "testimony_reference_time": null,
+    "source_timezone": "Asia/Singapore",
+    "items": [
+      {
+        "item_id": "ntuser01",
+        "acquired_path": "NTUSER.DAT",
+        "original_path": "C:\\Users\\Victim\\NTUSER.DAT",
+        "family": "userassist",
+        "account": null,
+        "sid": null,
+        "supplied_sha256": null,
+        "calculated_sha256": "05338f0a9858af2af68b4256283cb7b685919ef878251955bd5c7f9647fdb0eb",
+        "companion_item_ids": []
+      },
+      {
+        "item_id": "unknown_c3e3feea4d7d916b5c7e0bcb",
+        "acquired_path": "ntuser.dat.LOG1",
+        "original_path": null,
+        "family": "unknown",
+        "account": null,
+        "sid": null,
+        "supplied_sha256": null,
+        "calculated_sha256": "bf659d8ce520612fb845c68a1a370fd8f8d577b1ad1b73e76b1f0692567760c4",
+        "companion_item_ids": []
+      },
+      {
+        "item_id": "unknown_f23dbe79d03c5dceffbc3cf6",
+        "acquired_path": "ntuser.dat.LOG2",
+        "original_path": null,
+        "family": "unknown",
+        "account": null,
+        "sid": null,
+        "supplied_sha256": null,
+        "calculated_sha256": "fc7e5f9d0fe390fd496c439e454a99c3909ec0158293d67fbb04a2fa92adbbab",
+        "companion_item_ids": []
+      }
+    ],
+    "collection_omissions": []
+  },
+  "testimony": "I opened Microsoft Edge at 3:11 pm, the Photos app at 3:12 pm, and I have never run CCleaner or any wiping software on this computer.",
+  "testimony_sha256": "ea992191b27b40453e64e898a824c40eb93da266dc5a7b94f66e14e8c329605b",
+  "source_root": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\tests\\fixtures\\ccleaner_case",
+  "working_root": "C:\\Users\\User\\Desktop\\uni\\y3t1\\ICT3215-Digital Forensics\\df-project\\ICT3215-VeriTrace\\reports\\ccleaner_final",
+  "source_hashes": {
+    "case.json": "55ede5313c74c0cdee5c8a2591247e413a5256361ca6479f754b05f6b3d6f7bb",
+    "evidence/NTUSER.DAT": "05338f0a9858af2af68b4256283cb7b685919ef878251955bd5c7f9647fdb0eb",
+    "evidence/ntuser.dat.LOG1": "bf659d8ce520612fb845c68a1a370fd8f8d577b1ad1b73e76b1f0692567760c4",
+    "evidence/ntuser.dat.LOG2": "fc7e5f9d0fe390fd496c439e454a99c3909ec0158293d67fbb04a2fa92adbbab",
+    "testimony.txt": "ea992191b27b40453e64e898a824c40eb93da266dc5a7b94f66e14e8c329605b"
+  }
+}
