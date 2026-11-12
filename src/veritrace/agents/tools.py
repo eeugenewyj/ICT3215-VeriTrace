@@ -112,11 +112,22 @@ def compact_record(record):
 DETAIL_NOISE = {"source_short", "source_long", "parser", "profile", "source_item", "message", "data_type", "guid", "datetime", "timestamp_desc"}
 
 
+# Regression: a PECmd 2026.10 Prefetch row (~29 columns, incl. long Directories/FilesLoaded
+# lists and all 8 run times again) made get_record exceed the 4096-token budget for every claim.
+FAMILY_DETAIL_NOISE = {
+    "prefetch": {"Note", "SourceFilename", "SourceCreated", "SourceModified", "SourceAccessed", "Hash", "Size",
+                 "Directories", "FilesLoaded", "PathValidated", "ParsingError",
+                 "Volume0Name", "Volume0Serial", "Volume0Created", "Volume1Name", "Volume1Serial", "Volume1Created"},
+}
+
+
 def record_details(record):
     """The few raw parser fields worth reading: non-empty scalars, no duplicates of the target."""
     seen, out = {record.target}, {}
+    noise = DETAIL_NOISE | FAMILY_DETAIL_NOISE.get(record.family, set())
+    as_times = {t.role for t in record.times}
     for key, value in record.raw_fields.items():
-        if key in DETAIL_NOISE or isinstance(value, bool) or not isinstance(value, (str, int, float)) or value in ("", 0) or str(value) in seen:
+        if key in noise or f"{record.family}_{key}" in as_times or isinstance(value, bool) or not isinstance(value, (str, int, float)) or value in ("", 0) or str(value) in seen:
             continue
         out[key] = value[:160] + "..." if isinstance(value, str) and len(value) > 160 else value
         seen.add(str(value))

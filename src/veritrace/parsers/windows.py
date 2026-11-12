@@ -19,6 +19,15 @@ MAPPINGS = {
 }
 
 
+def is_prefetch_timeline(headers):
+    """PECmd's *_Timeline.csv: RunTime + ExecutableName, never the main export's LastRun.
+
+    PECmd 2026.10.3.0 added SourceFilename and PathValidated to the timeline,
+    so match on the defining columns instead of the exact older two-column set.
+    """
+    return {"ExecutableName", "RunTime"}.issubset(headers) and "LastRun" not in headers
+
+
 class WindowsCsvAdapter:
     def __init__(self, family, command, version, config_sha256, *, runner=None):
         self.family, self.command = family, command
@@ -48,7 +57,7 @@ class WindowsCsvAdapter:
             with path.open(encoding="utf-8-sig", newline="") as stream:
                 reader = csv.DictReader(stream)
                 headers = set(reader.fieldnames or [])
-                if self.family == "prefetch" and headers == {"ExecutableName", "RunTime"}:
+                if self.family == "prefetch" and is_prefetch_timeline(headers):
                     continue  # Separate PECmd timeline; runtime slots come from its full CSV.
                 if not self.mapping["required"].issubset(headers):
                     raise ParserError("Unsupported CSV schema; no guessed fields")
