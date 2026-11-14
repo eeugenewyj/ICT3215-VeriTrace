@@ -1,5 +1,30 @@
 # Parser compatibility record
 
+14 November update: the controlled jumplist01 acquisition supplied eight Jump
+List files and two unsupported NTFS index extras. JLECmd 2026.5.0 produced 20
+records; independent OLE/byte comparisons matched all 20, with three valid empty
+sources and no parser failures. A refreshed Jump List-only profile pins the
+current normalizer and passed genuine model-generated extraction/retrieval.
+The general private configuration retains older normalizer pins and needs
+revalidation before a broader run. See [Jump List integration](jumplist-contribution.md).
+
+## Historical deployment and source comparisons: 2–3 October 2026
+
+Desktop deployment review on 2 October 2026: LECmd, JLECmd, PECmd and RBCmd
+2026.5.0 are present, digitally signed and pass help/launch checks. FTK Imager
+8.3.0.27 is installed. Hindsight 2026.06 at the inspected revision now has an
+isolated Python 3.12 environment with passing dependency and CLI checks.
+RECmd 2026.5.0 and its signed UserAssist 0.5 plugin are now deployed; a restricted
+batch is prepared. The designated WinPmem signed-driver release is present on
+the host. The owner's victim RAM capture and matching desktop transfer hash
+were subsequently verified. The complete stopped-VM preservation copy and its
+included file hashes also passed. The owner-run FTK NTFS access check passed
+with a supplied screenshot. NTUSER.DAT, LOG1/LOG2 and Default's History have now
+been exported, inventoried and hashed. UserAssist's genuine acquired-sample
+comparison passed, followed by LNK, Jump Lists, Prefetch and Recycle Bin on
+3 October. Edge's nonempty-source comparison remains pending. See
+[current installation inventory and setup steps](tools-setup.md).
+
 Hindsight source inspected: commit `4cf136fd70577b0da540b9a69750b769c6c27f32`,
 display version 2026.06, from the [official repository](https://github.com/RyanDFIR/hindsight).
 Its actual CLI advertises `--only history,downloads` and JSONL export.
@@ -29,9 +54,61 @@ Source revisions inspected for the remaining mappings:
 | RegistryPlugins | c16219db698f7ee66fbd97de7ec5d17fc10bdf8e |
 
 Production family enablement requires a recorded comparison against the
-victim's acquired samples. The remaining five parser families have not yet
-been validated. Do not credit absent tools or an unconfigured decoder as
+victim's acquired samples. Five of six families now pass; Edge remains pending.
+RECmd's restricted batch produced 31 records from the preserved victim hive.
+An independent python-registry 1.3.1 reader traversed every Count key and matched
+the complete key/value identity set, ROT13 targets, run/focus counters, focus
+time and raw/normalized timestamps against the plugin and adapter exports.
+All 31 matched; 20 have timestamps. Four UEME control/session records are
+retained without crediting them as application executions. The clean hive's
+matching sequence numbers mean transaction-log replay was not exercised.
+Binary bytes and field comparisons are retained privately with the source hash
+in .runs/disk-rehearsal01/parser-validation01/userassist-comparison.json.
+
+The private userassist profile pins 70 deployed package/batch files. The
+production build_adapters path verified those pins and repeated the same
+31-record field result on fresh working copies; acquired hashes stayed
+unchanged. Five families were enabled in veritrace.local.toml at that check.
+The model and benchmark settings were preserved. Their current hash/runtime
+revalidation status is described in the November update above.
+
+The acquired Default History passes SQLite integrity checks, but every activity
+table is empty, including both the standard and Edge-specific tables. Hindsight
+returned zero records, matching the source counts. The owner reports Default
+as the only profile and History-wal/History-shm absent. This is an empty-source
+rehearsal, not a passed nonempty visit/download compatibility gate. A controlled
+browser action and fresh acquisition are needed. On 3 October, nine LNK files,
+three automatic/four custom Jump Lists and 207 nonempty Prefetch files were
+received and hashed; their parser/native comparisons subsequently passed. Recycle
+Bin subsequently received two matching nonempty $I/$R pairs after an owner
+directory-export warning; its native parser comparison subsequently passed.
+Twenty-two zero-byte .copy0 Prefetch extras are retained without treating them
+as usable .pf sources. Do not credit absent sources or unconfigured decoders as
 successful parsing.
+
+The retained native check matched 9 LNK, 16 Jump List, 207 Prefetch and 2 Recycle
+Bin records. The LNK check validates target FILETIMEs and available embedded
+LinkInfo paths; shell-only display-path resolution is not independently certified.
+Jump List checks use independent OLE access, DestList fields and embedded links.
+Prefetch checks use native Windows XPRESS-Huffman decompression followed by
+byte-field inspection; Recycle Bin checks compare metadata fields and matching
+content sizes/hashes. Three valid 24-byte known-category custom containers have
+no stored entries. They produce no JLECmd CSV and now receive empty coverage
+only after strict structure validation. Missing CSV for other input remains an error.
+
+SourceCreated/SourceModified/SourceAccessed describe parser working-copy
+filesystem metadata and are retained only as annotated raw fields. They are not
+victim LNK activity timestamps. Embedded LocalPath is preferred to shell display
+paths, which can omit filename extensions. Automatic Jump List CreationTime
+derived from FileBirthDroid is identified as a birth-object UUID time; it is not
+an independently recorded interaction timestamp. Known-folder display labels
+remain in raw output while the target retains the original known-folder identifier.
+
+The five-family configured dispatcher check produced 265 records, no failed
+sources and matching original hashes; a repeated request was cached. Profiles
+for the four Windows CSV tools pin the executable and normalizer dependencies.
+Comparisons and execution receipts are under .runs/disk-rehearsal01/parser-validation02.
+This does not complete genuine LLM-agent integration or evaluation.
 
 ## Configure a validated family
 
@@ -64,8 +141,11 @@ Accepted schema identifiers:
 
 UserAssist additionally requires batch_path, a pinned minimal UserAssist batch,
 plugin_version = "0.5", and hashes for the deployed decoder/plugin dependencies.
-Create and test the batch against the installed RECmd version; no successful
-plugin deployment has been claimed here. Raw binary UserAssist values remain
+The deployed batch is .external/RECmd/BatchExamples/VeriTraceUserAssist.reb.
+Its actual batch parsing and decoded export have now been compared against a
+preserved victim hive with supplied logs; the pass applies to this clean hive
+and does not establish replay behavior for a dirty hive.
+Raw binary UserAssist values remain
 in the preserved hive because this inspected plugin does not export them.
 
 Use official [Hindsight](https://github.com/RyanDFIR/hindsight),
@@ -76,6 +156,7 @@ Use official [Hindsight](https://github.com/RyanDFIR/hindsight),
 [RECmd](https://github.com/EricZimmerman/RECmd) and
 [RegistryPlugins](https://github.com/EricZimmerman/RegistryPlugins) sources.
 Keep binaries, actual --help output, runtime requirements and export headers
-beside the private comparison record. The development machine has no .NET SDK;
-the Zimmerman tools were inspected from source and tested with controlled
-export fixtures, rather than built or run against a victim acquisition.
+beside the private comparison record. The earlier development checks used
+inspected source and controlled export fixtures. The desktop now has the
+selected .NET runtime and executed the installed RECmd package against a real
+victim hive; no local source build is claimed.
