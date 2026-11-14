@@ -1,0 +1,10 @@
+{
+  "version": "REPLACE_WITH_OBSERVED_VERSION",
+  "schema": "hindsight-history-2026.06-v1",
+  "command_hashes": {},
+  "acquired_sample": {
+    "verified": false,
+    "source_sha256": null,
+    "comparison_record": null
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "case_id": "dev01",
+  "acquisition": {
+    "description": "FORMAT EXAMPLE ONLY: replace with measured acquisition metadata",
+    "tool": null,
+    "version": null,
+    "collection_started": null,
+    "collection_finished": null,
+    "snapshot_id": null
+  },
+  "windows": {"edition": "Windows 10 Pro", "build": null},
+  "edge": {"version": null, "profile": "Default"},
+  "security": {"disk_encryption": null, "verification_time": null},
+  "source_timezone": "Asia/Singapore",
+  "testimony_reference_time": null,
+  "items": [
+    {
+      "item_id": "history01",
+      "family": "edge_history",
+      "acquired_path": "export/history.bin",
+      "original_path": "C:\\Users\\Victim\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\History",
+      "account": null,
+      "sid": null,
+      "supplied_sha256": null,
+      "companion_item_ids": ["wal01"]
+    },
+    {
+      "item_id": "wal01",
+      "family": "unknown",
+      "acquired_path": "export/wal.bin",
+      "original_path": "C:\\Users\\Victim\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\History-wal"
+    }
+  ],
+  "collection_omissions": ["FORMAT EXAMPLE: replace this list with actual omitted sources and reasons"]
+}

@@ -1,0 +1,17 @@
+# Copy to veritrace.local.toml for machine-specific configuration.
+model_base_url = "http://127.0.0.1:11434"
+model_name = "qwen3:8b"
+num_ctx = 4096
+temperature = 0.1
+model_timeout_s = 120
+parser_timeout_s = 120
+enabled_families = ["edge_history"]
+# Add after a successful desktop benchmark:
+# budget_profile = ".runs/benchmark.budget.json"
+# tokenizer_path = ".external/qwen3-tokenizer.json"
+
+# Parser commands/profiles are added after compatibility validation.
+[parser_commands]
+[parser_versions]
+[parser_config_hashes]
+[parser_profiles]

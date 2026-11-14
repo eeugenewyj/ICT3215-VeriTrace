@@ -1,0 +1,20 @@
+{
+  "scenario": "Baseline Test: User downloaded a JPG, accessed it, and deleted it to the Recycle Bin.",
+  "evidence_files": [
+    "History",
+    "sample-jpg-files-sample_1280x853.lnk",
+    "$IUIQ75I.jpg"
+  ],
+  "claims": [
+    {
+      "id": "claim_001_true",
+      "statement": "I downloaded the sample image at 4:25 pm. I opened it to look at it at 4:26 pm, and then I deleted it at 4:27 pm.",
+      "expected_verdict": "Supported"
+    },
+    {
+      "id": "claim_002_false",
+      "statement": "I have never downloaded, opened, or deleted any JPG images on this computer.",
+      "expected_verdict": "Contradicted"
+    }
+  ]
+}
