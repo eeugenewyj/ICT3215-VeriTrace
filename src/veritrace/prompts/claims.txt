@@ -7,7 +7,11 @@ otherwise occurrence is 1. Give unique claim IDs. Distinct actions may share a
 sentence. Keep negation, claimed actor, uncertainty
 and ambiguous targets. Initial actions: download_file, open_document,
 launch_program, recycle_file. Preserve other actions explicitly; do not force
-them into supported actions. Relative dates need the supplied reference_time,
+them into supported actions. Extract only activities actually asserted; do not
+enumerate all action categories or infer downloading, launching or deletion
+from a statement about opening. Resolve explicit clock times in source_timezone,
+respecting AM/PM; do not add the timezone offset to an already-local clock.
+Relative dates need the supplied reference_time,
 never acquisition time. Yesterday, today and tomorrow mean whole calendar days in source_timezone
 (00:00 to 24:00), never a rolling 24 hours. Leave vague times unresolved. time_expression is the
 witness's own words for the time, copied from the testimony; use null when the

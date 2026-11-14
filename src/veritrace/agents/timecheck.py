@@ -36,7 +36,14 @@ def _compare(claim, records, source_timezone, tolerance):
     if wanted is None or not source_timezone:  # without the witness's timezone a clock time cannot be compared
         return None
     zone = ZoneInfo(source_timezone)
-    local = [t.normalized_utc.astimezone(zone) for r in records for t in r.times if t.normalized_utc]
+    local = []
+    for record in records:
+        times = record.times
+        if record.family == "jumplist":
+            # Target-file FILETIMEs and birth-object UUID times do not measure
+            # the claimed document interaction. Custom lists may have no such time.
+            times = [t for t in times if claim.action == "open_document" and t.role == "destlist_entry_modified"]
+        local.extend(t.normalized_utc.astimezone(zone) for t in times if t.normalized_utc)
     if not local:
         return None
     for stamp in local:

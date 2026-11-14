@@ -53,6 +53,18 @@ def search_hint(claim, claims, coverage=None):
     return hint
 
 
+def tool_search_hint(case_id, claim, claims, coverage=None):
+    """Show the model an actual call envelope, not filters at the argument root."""
+    hint = search_hint(claim, claims, coverage)
+    if hint is None:
+        return None
+    filters = {key: hint[key] for key in ("family", "target") if key in hint}
+    proposal = {"name": "search_records", "arguments": {"case_id": case_id, "filters": filters, "limit": hint["limit"]}}
+    if hint.get("then_try_families"):
+        proposal["then_try_families"] = hint["then_try_families"]
+    return proposal
+
+
 def resolved_target(claim, claims):
     """The claim's own target, or for a pronoun ('it') the nearest earlier claim's named target, else a later one."""
     if target_word(claim.target):

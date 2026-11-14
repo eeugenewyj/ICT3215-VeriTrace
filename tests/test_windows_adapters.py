@@ -1,5 +1,6 @@
 import csv
 import json
+import struct
 
 import pytest
 
@@ -110,3 +111,43 @@ def test_prefetch_timeline_is_skipped_for_old_and_2026_pecmd(tmp_path, timeline_
     assert record.target == "NOTEPAD.EXE" and record.raw_output_locator["path"].endswith("export.csv")
     assert [t.role for t in record.times] == ["prefetch_LastRun", "prefetch_PreviousRun0"]
     assert record.times[0].normalized_utc.isoformat().startswith("2026-11-01T17:26:02")
+
+def test_lnk_uses_embedded_path_and_excludes_working_copy_times(tmp_path):
+    from veritrace.parsers.windows import WindowsCsvAdapter
+    case = case_for(tmp_path, "lnk")
+    row = ROWS["lnk"] | {"TargetIDAbsolutePath": "This PC\\report", "SourceCreated": "2099-01-01T00:00:00Z"}
+    result = WindowsCsvAdapter("lnk", ["tool"], "1", "0" * 64, runner=CsvRunner(row)).extract(case, case.manifest.items)
+    record = result.records[0]
+    assert record.target == row["LocalPath"]
+    assert [stamp.role for stamp in record.times] == ["target_file_created"]
+    assert record.raw_fields["SourceCreated"] == row["SourceCreated"]
+    assert "working copy" in record.raw_fields["source_file_timestamps_scope"]
+
+
+@pytest.mark.parametrize("invalid", [False, True])
+def test_missing_jumplist_csv_requires_verified_empty_container(tmp_path, invalid):
+    from veritrace.errors import ParserError
+    from veritrace.parsers.windows import WindowsCsvAdapter
+    case = case_for(tmp_path, "jumplist")
+    source = tmp_path / "empty.customDestinations-ms"
+    source.write_bytes(struct.pack("<6I", 2, 1, 0, 1, 2, 0 if invalid else 0xBABFFBAB))
+    output = tmp_path / "parser-output"
+    output.mkdir()
+    adapter = WindowsCsvAdapter("jumplist", ["tool"], "1", "0" * 64)
+    if invalid:
+        with pytest.raises(ParserError, match="missing"):
+            adapter.read_exports(case, case.manifest.items[0], source, output)
+    else:
+        assert adapter.read_exports(case, case.manifest.items[0], source, output) == []
+
+
+def test_jumplist_preserves_known_folder_identity_and_uuid_time_semantics(tmp_path):
+    from veritrace.parsers.windows import WindowsCsvAdapter
+    case = case_for(tmp_path, "jumplist")
+    target = "knownfolder:{374DE290-123F-4565-9164-39C4925E467B}"
+    row = ROWS["jumplist"] | {"Path": target + " ==> Downloads", "FileBirthDroid": "98669b4d-bdbb-11f1-8195-000c2952b6f5"}
+    record = WindowsCsvAdapter("jumplist", ["tool"], "1", "0" * 64, runner=CsvRunner(row)).extract(case, case.manifest.items).records[0]
+    assert record.target == target
+    assert record.raw_fields["Path"] == row["Path"]
+    assert record.times[0].role == "destlist_birth_object_id_created"
+    assert "UUID" in record.times[0].normalization_basis

@@ -2,6 +2,7 @@ import json
 import time
 from datetime import timezone
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, ValidationError
 
@@ -63,8 +64,8 @@ ARGUMENTS = {"extract_case": CaseArgs, "search_records": SearchArgs, "get_record
 # compact_schema, so the guidance lives here.
 DESCRIPTIONS = {
     "extract_case": "Parse the registered case evidence into records. Already done before claims are assessed.",
-    "search_records": "Search evidence records; filters are optional and combine with AND. family: edge_history (downloads, page visits), lnk (files opened), recyclebin (files deleted), jumplist, prefetch or userassist (programs run). target: substring of the file name, path or URL (a distinctive word such as sample or .pdf, never a pronoun). account. start and end: ISO-8601 with timezone. time_role: an exact role such as download_started, visit_time, target_file_accessed or recycle_bin_deletion, never a clock time. There is no action filter. Use limit 5. Times are UTC.",
-    "get_record": "Fetch one full record by the record_id returned from a search.",
+    "search_records": "Search evidence records; filters are optional and combine with AND. family: edge_history (downloads, page visits), lnk (file-target context), recyclebin (files deleted), jumplist (application-associated destinations/tasks), prefetch or userassist (program activity). target: substring of the file name, path or URL (a distinctive word such as sample or .pdf, never a pronoun). account. start and end: ISO-8601 with timezone. time_role: an exact role such as download_started, visit_time, destlist_entry_modified or recycle_bin_deletion, never a clock time. There is no action filter. Use limit 5. Times are UTC.",
+    "get_record": "Fetch additional selected parser details by the record_id returned from a search.",
     "get_source_coverage": "List which evidence sources were parsed, unsupported or failed.",
 }
 
@@ -93,15 +94,52 @@ def tool_definitions(case_id, names=None):
 
 # Said about every browser record and already in the system prompt; repeating it per record wastes context.
 GENERIC_LIMITATIONS = {"A browser record does not establish a human actor or that a PDF was read."}
+JUMPLIST_GENERIC_LIMITATIONS = {
+    "Parser item identifies the source file and export row; compare acquired samples before enabling this mapping.",
+    "Artefact activity does not identify a human actor.",
+    "Target-file timestamps are distinct from interaction times; recent-item traces alone do not prove a PDF was read.",
+    "Parser SourceCreated/SourceModified/SourceAccessed are working-copy metadata; excluded from victim evidence timestamps.",
+}
 
 
-def compact_record(record):
+def compact_record(record, source_timezone=None, *, detailed=False):
     # Regression: with num_ctx 4096 one 4-record search plus the full coverage table left no room
     # for a second search (context_limit). Fields the model cannot use are left out of its view;
     # the full record stays in the index and is returned by get_record.
+    times, omitted = record.times, []
+    zone, zone_error = None, False
+    if record.family == "jumplist":
+        # Target-file and UUID dates are not document-interaction clocks. Keep
+        # them in the full record, explicitly naming omitted roles in this view.
+        times = [t for t in record.times if t.role == "destlist_entry_modified"]
+        omitted = sorted({t.role for t in record.times if t.role != "destlist_entry_modified"})
+        if source_timezone:
+            try:
+                zone = ZoneInfo(source_timezone)
+            except (ZoneInfoNotFoundError, ValueError):
+                zone_error = True
     out = {"record_id": record.record_id, "family": record.family, "target": record.target,
-           "times": [{"role": t.role, "utc": t.normalized_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if t.normalized_utc else None, **({"uncertainty": t.uncertainty} if t.uncertainty else {})} for t in record.times]}
-    notes = [n for n in record.limitations if n not in GENERIC_LIMITATIONS]
+           "times": [{"role": t.role, "utc": t.normalized_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if t.normalized_utc else None,
+                      **({"local": t.normalized_utc.astimezone(zone).isoformat(timespec="seconds")} if zone and t.normalized_utc else {}),
+                      **({"uncertainty": t.uncertainty} if t.uncertainty else {})} for t in times]}
+    if record.family == "jumplist":
+        # The same target can occur in Quick Access and Notepad lists. Keep its
+        # application association visible before the model chooses a record.
+        if record.application:
+            out["application"] = record.application
+        source = (record.original_path or "").casefold()
+        if source.endswith(".automaticdestinations-ms"):
+            out["jumplist_type"] = "automatic"
+        elif source.endswith(".customdestinations-ms"):
+            out["jumplist_type"] = "custom"
+        if omitted and detailed:
+            out["omitted_noninteraction_time_roles"] = omitted
+        if zone:
+            out["source_timezone"] = source_timezone
+        elif zone_error:
+            out["local_time_note"] = "Source timezone unavailable; local time was not inferred."
+    generic = GENERIC_LIMITATIONS | (JUMPLIST_GENERIC_LIMITATIONS if record.family == "jumplist" else set())
+    notes = [n for n in record.limitations if n not in generic]
     if notes:
         out["limitations"] = notes
     if record.account:
@@ -118,7 +156,16 @@ FAMILY_DETAIL_NOISE = {
     "prefetch": {"Note", "SourceFilename", "SourceCreated", "SourceModified", "SourceAccessed", "Hash", "Size",
                  "Directories", "FilesLoaded", "PathValidated", "ParsingError",
                  "Volume0Name", "Volume0Serial", "Volume0Created", "Volume1Name", "Volume1Serial", "Volume1Created"},
+    # Keep application/entry identity, interaction count, pin status, arguments
+    # and notes. Times are already represented with their semantic roles above.
+    "jumplist": {"SourceFile", "SourceCreated", "SourceModified", "SourceAccessed", "source_file_timestamps_scope",
+                 "AppIdDescription", "CreationTime", "LastModified", "TargetCreated", "TargetModified", "TargetAccessed",
+                 "FileBirthDroid", "FileDroid", "VolumeBirthDroid", "VolumeDroid", "Hostname", "MacAddress",
+                 "MachineID", "MachineMACAddress", "TrackerCreatedOn", "TargetMFTEntryNumber", "TargetMFTSequenceNumber",
+                 "HasSps", "DestListVersion", "LastUsedEntryNumber", "ExtraBlocksPresent", "HeaderFlags"},
 }
+JUMPLIST_DETAIL_FIELDS = {"AppId", "EntryNumber", "EntryName", "InteractionCount", "PinStatus", "MRU",
+                         "Arguments", "WorkingDirectory", "Notes", "FileSize"}
 
 
 def record_details(record):
@@ -127,6 +174,8 @@ def record_details(record):
     noise = DETAIL_NOISE | FAMILY_DETAIL_NOISE.get(record.family, set())
     as_times = {t.role for t in record.times}
     for key, value in record.raw_fields.items():
+        if record.family == "jumplist" and key not in JUMPLIST_DETAIL_FIELDS:
+            continue
         if key in noise or f"{record.family}_{key}" in as_times or isinstance(value, bool) or not isinstance(value, (str, int, float)) or value in ("", 0) or str(value) in seen:
             continue
         out[key] = value[:160] + "..." if isinstance(value, str) and len(value) > 160 else value
@@ -134,7 +183,7 @@ def record_details(record):
     return out
 
 
-def model_view(name, result):
+def model_view(name, result, *, source_timezone=None):
     """What the model reads. Regression: a full get_record result (~1,400 tokens of raw parser
     fields) overflowed the 4096-token budget. The ledger keeps the complete result for audit."""
     if name == "get_source_coverage" and "coverage" in result:
@@ -143,7 +192,7 @@ def model_view(name, result):
     if name != "get_record" or "record_id" not in result:
         return result
     record = EvidenceRecord.model_validate(result)
-    return {**compact_record(record), "original_path": record.original_path, "details": record_details(record)}
+    return {**compact_record(record, source_timezone, detailed=True), "original_path": record.original_path, "details": record_details(record)}
 
 
 def compact_coverage(entries):
@@ -162,6 +211,7 @@ class ToolBackend:
     def __init__(self, case, index, adapters, ledger):
         self.case, self.index, self.adapters, self.ledger = case, index, adapters, ledger
         self.coverage, self.extracted = [], False
+        self.context_compactions = 0
 
     def dispatch(self, name, arguments, *, claim_id):
         started, result, error, ids, cached = time.perf_counter(), None, None, [], False
@@ -190,7 +240,7 @@ class ToolBackend:
             else:
                 page = self.index.search(validated.case_id, validated.filters, validated.cursor, validated.limit)
                 ids = [r.record_id for r in page.records]
-                result = {"records": [compact_record(r) for r in page.records], "total": page.total, "next_cursor": page.next_cursor}
+                result = {"records": [compact_record(r, self.case.manifest.source_timezone) for r in page.records], "total": page.total, "next_cursor": page.next_cursor}
                 if not page.total and any(v is not None for v in validated.filters.model_dump().values()):
                     result["hint"] = "No records matched. Filters combine with AND; retry with fewer filters and limit 5 before concluding the source has nothing relevant."
             return result
