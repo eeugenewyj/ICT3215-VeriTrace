@@ -30,8 +30,8 @@ def claimed_seconds(expression):
     return None
 
 
-def time_conflict(claim, records, source_timezone, tolerance=TIME_TOLERANCE_S):
-    """None when the check passes or does not apply; otherwise a sentence explaining the mismatch."""
+def _compare(claim, records, source_timezone, tolerance):
+    """None when the comparison does not apply; else (matched, record times in the witness's timezone)."""
     wanted = claimed_seconds(claim.time_expression)
     if wanted is None or not source_timezone:  # without the witness's timezone a clock time cannot be compared
         return None
@@ -44,6 +44,20 @@ def time_conflict(claim, records, source_timezone, tolerance=TIME_TOLERANCE_S):
         for target in wanted:
             gap = (seconds - target + 43200) % 86400 - 43200
             if -tolerance <= gap <= 60 + tolerance:  # the stated minute, plus tolerance either side
-                return None
-    shown = ", ".join(sorted({s.strftime("%H:%M:%S") for s in local}))
+                return True, local
+    return False, local
+
+
+def time_conflict(claim, records, source_timezone, tolerance=TIME_TOLERANCE_S):
+    """None when the check passes or does not apply; otherwise a sentence explaining the mismatch."""
+    result = _compare(claim, records, source_timezone, tolerance)
+    if result is None or result[0]:
+        return None
+    shown = ", ".join(sorted({s.strftime("%H:%M:%S") for s in result[1]}))
     return f"the witness stated {claim.time_expression!r}, but the cited record times in {source_timezone} are {shown}; none is within {tolerance // 60} minutes"
+
+
+def time_agrees(claim, records, source_timezone, tolerance=TIME_TOLERANCE_S):
+    """True only when the claim has an exact clock time and a cited record time matches it."""
+    result = _compare(claim, records, source_timezone, tolerance)
+    return bool(result and result[0])

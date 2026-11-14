@@ -75,3 +75,38 @@ def test_custom_jumplist_preserves_entry_name(tmp_path):
     row = {"SourceFile": "", "EntryName": "0", "LocalPath": "C:\\report.pdf", "TargetCreated": "2026-10-01T10:00:00+00:00"}
     result = WindowsCsvAdapter("jumplist", ["tool"], "1", "0" * 64, runner=CsvRunner(row)).extract(case, case.manifest.items)
     assert result.records[0].locator.identifiers["entry_name"] == "0"
+
+# Header rows copied from PECmd 2026.10.3.0 output (practice laptop Prefetch, 2026-11-09).
+PECMD_2026_MAIN = "Note,SourceFilename,SourceCreated,SourceModified,SourceAccessed,ExecutableName,FullPath,PathValidated,Hash,Size,Version,RunCount,LastRun,PreviousRun0,PreviousRun1,PreviousRun2,PreviousRun3,PreviousRun4,PreviousRun5,PreviousRun6,Volume0Name,Volume0Serial,Volume0Created,Volume1Name,Volume1Serial,Volume1Created,Directories,FilesLoaded,ParsingError".split(",")
+
+
+class PecmdRunner:
+    """Writes the main export plus a timeline CSV, as PECmd does."""
+    def __init__(self, timeline_headers):
+        self.timeline_headers = timeline_headers
+    def run(self, command, output_dir):
+        output_dir.mkdir(parents=True)
+        source = command[command.index("-f") + 1]
+        main = dict.fromkeys(PECMD_2026_MAIN, "")
+        main |= {"SourceFilename": source, "ExecutableName": "NOTEPAD.EXE", "RunCount": "12", "LastRun": "2026-11-01T17:26:02.9677786+00:00", "PreviousRun0": "2026-11-01T17:21:36.1438995+00:00", "ParsingError": "False"}
+        with (output_dir / "export.csv").open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(stream, fieldnames=PECMD_2026_MAIN)
+            writer.writeheader()
+            writer.writerow(main)
+        timeline = {"RunTime": "2026-11-01T17:26:02.9677786+00:00", "ExecutableName": "NOTEPAD.EXE", "SourceFilename": source, "PathValidated": "False"}
+        with (output_dir / "export_Timeline.csv").open("w", newline="", encoding="utf-8") as stream:
+            writer = csv.DictWriter(stream, fieldnames=self.timeline_headers)
+            writer.writeheader()
+            writer.writerow({k: timeline[k] for k in self.timeline_headers})
+
+
+@pytest.mark.parametrize("timeline_headers", [["RunTime", "ExecutableName"], ["RunTime", "ExecutableName", "SourceFilename", "PathValidated"]])
+def test_prefetch_timeline_is_skipped_for_old_and_2026_pecmd(tmp_path, timeline_headers):
+    from veritrace.parsers.windows import WindowsCsvAdapter
+    case = case_for(tmp_path, "prefetch")
+    result = WindowsCsvAdapter("prefetch", ["PECmd"], "2026.10.3.0", "0" * 64, runner=PecmdRunner(timeline_headers)).extract(case, case.manifest.items)
+    assert result.coverage[0].status == "parsed", result.coverage[0].reason
+    (record,) = result.records
+    assert record.target == "NOTEPAD.EXE" and record.raw_output_locator["path"].endswith("export.csv")
+    assert [t.role for t in record.times] == ["prefetch_LastRun", "prefetch_PreviousRun0"]
+    assert record.times[0].normalized_utc.isoformat().startswith("2026-11-01T17:26:02")

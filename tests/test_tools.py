@@ -137,3 +137,16 @@ def test_get_record_view_for_the_model_is_trimmed_but_the_ledger_keeps_everythin
     assert len(message["content"]) < 600
     assert "native_row" in tools.ledger.entries[-1].result["raw_fields"]
     tools.index.connection.close()
+
+
+def test_model_sees_second_precision_utc_and_a_compact_coverage_table():
+    from datetime import datetime, timezone
+    from tests.factories import make_record
+    from veritrace.agents.tools import compact_record, model_view
+    from veritrace.evidence.models import EvidenceTime
+    stamp = EvidenceTime(role="target_file_created", raw_value=1, raw_encoding="x", raw_precision="us", normalized_utc=datetime(2026, 10, 16, 8, 25, 19, 795585, tzinfo=timezone.utc))
+    assert compact_record(make_record(times=[stamp]))["times"] == [{"role": "target_file_created", "utc": "2026-10-16T08:25:19Z"}]
+    shown = model_view("get_source_coverage", {"coverage": [
+        {"family": "lnk", "status": "parsed", "record_count": 1, "item_id": "lnk01", "companion_handling": [], "reason": None, "error_code": None},
+        {"family": "jumplist", "status": "unsupported", "record_count": 0, "item_id": None, "companion_handling": [], "reason": "Family outside enabled coverage", "error_code": None}]})
+    assert shown == {"sources": [{"family": "lnk", "status": "parsed", "records": 1, "item_id": "lnk01"}], "not_covered": ["jumplist"]}

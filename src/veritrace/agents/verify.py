@@ -2,11 +2,13 @@ import json
 
 from pydantic import ValidationError
 
-from ..errors import CitationError, IntegrityError, ModelError, VeriTraceError, WorkflowError
+from ..errors import CitationError, ContextOverflowError, IntegrityError, ModelError, VeriTraceError, WorkflowError
 from .claims import compact_schema, load_prompt
 from .citations import validate_citations
+from ..runtime.client import ModelTurn
 from .models import Assessment, VerificationResult
-from .timecheck import time_conflict
+from .hints import claim_view, coverage_view, search_hint
+from .timecheck import time_agrees, time_conflict
 from .tools import compact_coverage, model_view, tool_definitions
 
 
@@ -48,13 +50,23 @@ def verify_claims(case, claims, client, budget, tools):
     definitions = tool_definitions(case.manifest.case_id, ["search_records", "get_record", "get_source_coverage"])
     schema = compact_schema(Assessment.model_json_schema())
     for claim in claims:
-        messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "source_timezone": case.manifest.source_timezone, "claim": claim.model_dump(mode="json"), "coverage": compact_coverage(tools.coverage)}, ensure_ascii=False, separators=(",", ":"))}]
-        count, repairs, missing_search = 0, 0, 0
+        messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "source_timezone": case.manifest.source_timezone, "claim": claim_view(claim, claims), "search_hint": search_hint(claim, claims, tools.coverage), "coverage": coverage_view(tools.coverage)}, ensure_ascii=False, separators=(",", ":"))}]
+        count, repairs, missing_search, stopped_early = 0, 0, 0, False
         try:
             while True:
                 # Native tool syntax must remain unconstrained by the final JSON grammar.
-                budget.ensure(messages, definitions, None)
-                turn = client.chat(messages, tools=definitions)
+                searched = any(r.claim_id == claim.claim_id and r.name == "search_records" and r.error is None for r in tools.ledger.entries)
+                try:
+                    budget.ensure(messages, definitions, None)
+                    turn = client.chat(messages, tools=definitions)
+                except ContextOverflowError:
+                    # Regression: qwen3:8b kept searching other families after it had its evidence, the next request
+                    # no longer fit 4,096 tokens, and the whole claim failed. With a search already done, stop
+                    # retrieving and assess from what was found (the final turn omits the tool definitions).
+                    if not searched:
+                        raise
+                    stopped_early = True
+                    turn = ModelTurn(content="")
                 if turn.tool_calls:
                     if count + len(turn.tool_calls) > 12:
                         raise WorkflowError("Twelve tool calls exhausted for this claim")
@@ -85,6 +97,12 @@ def verify_claims(case, claims, client, budget, tools):
                         problem = time_conflict(claim, cited, case.manifest.source_timezone)
                         if problem:
                             assessment = assessment.model_copy(update={"status": "inconclusive", "justification": f"{assessment.justification} Host time check: {problem}, so 'supported' was withheld.", "limitations": [*assessment.limitations, "Status changed from supported to inconclusive by the host time check"]})
+                    if assessment.status == "contradicted" and not claim.negated:
+                        cited = [tools.index.get(case.manifest.case_id, rid) for rid in assessment.cited_record_ids]
+                        if time_agrees(claim, cited, case.manifest.source_timezone):
+                            assessment = assessment.model_copy(update={"status": "inconclusive", "justification": f"{assessment.justification} Host check: a cited record's time matches the witness's stated time, so 'contradicted' was withheld.", "limitations": [*assessment.limitations, "Status changed from contradicted to inconclusive by the host time check"]})
+                    if stopped_early:
+                        assessment = assessment.model_copy(update={"limitations": [*assessment.limitations, "Retrieval stopped early because the model context budget was reached; assessed from the records retrieved so far"]})
                     assessments.append(assessment)
                     break
                 except (ValueError, ValidationError, CitationError) as exc:
