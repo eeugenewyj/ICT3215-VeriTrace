@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "case_id": "jumplist01",
+  "windows": {
+    "edition": "Windows 10 Pro",
+    "build": null
+  },
+  "source_timezone": "Asia/Singapore",
+  "items": [
+    {
+      "item_id": "jl-auto-5f7b5f1e",
+      "acquired_path": "AutomaticDestinations/5f7b5f1e01b83767.automaticDestinations-ms",
+      "original_path": "C:\\Users\\eugene\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\AutomaticDestinations\\5f7b5f1e01b83767.automaticDestinations-ms",
+      "family": "jumplist",
+      "account": "eugene",
+      "supplied_sha256": "a4518781e0bd6215270069de28d9cba2e56a9c1ca9cbfa66fad3d1ac90ed7023"
+    },
+    {
+      "item_id": "jl-auto-9b9cdc69",
+      "acquired_path": "AutomaticDestinations/9b9cdc69c1c24e2b.automaticDestinations-ms",
+      "original_path": "C:\\Users\\eugene\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\AutomaticDestinations\\9b9cdc69c1c24e2b.automaticDestinations-ms",
+      "family": "jumplist",
+      "account": "eugene",
+      "supplied_sha256": "f74bc2da1bfb7d1163d53d69e55996629817fb5ecf29af6c755ad49b492fa092"
+    },
+    {
+      "item_id": "jl-auto-dd7c3b1a",
+      "acquired_path": "AutomaticDestinations/dd7c3b1adb1c168b.automaticDestinations-ms",
+      "original_path": "C:\\Users\\eugene\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\AutomaticDestinations\\dd7c3b1adb1c168b.automaticDestinations-ms",
+      "family": "jumplist",
+      "account": "eugene",
+      "supplied_sha256": "a7444f15f32b8dec1f17f530d5d8a9ecfbe00ac407fd18884d9387e6f050411d"
+    },
+    {
+      "item_id": "jl-auto-f01b4d95",
+      "acquired_path": "AutomaticDestinations/f01b4d95cf55d32a.automaticDestinations-ms",
+      "original_path": "C:\\Users\\eugene\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\AutomaticDestinations\\f01b4d95cf55d32a.automaticDestinations-ms",
+      "family": "jumplist",
+      "account": "eugene",
+      "supplied_sha256": "1b0823875f6e20beb574ec1765ea65e91534e4551edf017392f9bde6ee665bca"
+    },
+    {
+      "item_id": "jl-custom-590aee7b",
+      "acquired_path": "CustomDestinations/590aee7bdd69b59b.customDestinations-ms",
+      "original_path": "C:\\Users\\eugene\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\CustomDestinations\\590aee7bdd69b59b.customDestinations-ms",
+      "family": "jumplist",
+      "account": "eugene",
+      "supplied_sha256": "887961d0db5c361b4a5a3c5de4ee190d718869ea055237f7b4a0eb7b5a5b084a"
+    },
+    {
+      "item_id": "jl-custom-7e4dca80",
+      "acquired_path": "CustomDestinations/7e4dca80246863e3.customDestinations-ms",
+      "original_path": "C:\\Users\\eugene\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\CustomDestinations\\7e4dca80246863e3.customDestinations-ms",
+      "family": "jumplist",
+      "account": "eugene",
+      "supplied_sha256": "74d6d8c58d0beb0716eeecdc55366e193186924a616e057cd210f4104e5d85e9"
+    },
+    {
+      "item_id": "jl-custom-f01b4d95",
+      "acquired_path": "CustomDestinations/f01b4d95cf55d32a.customDestinations-ms",
+      "original_path": "C:\\Users\\eugene\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\CustomDestinations\\f01b4d95cf55d32a.customDestinations-ms",
+      "family": "jumplist",
+      "account": "eugene",
+      "supplied_sha256": "7116ff028244a01f3d17f1d3bc2e1506bc9999c2e40e388458f0cccc4e117312"
+    },
+    {
+      "item_id": "jl-custom-f18460fd",
+      "acquired_path": "CustomDestinations/f18460fded109990.customDestinations-ms",
+      "original_path": "C:\\Users\\eugene\\AppData\\Roaming\\Microsoft\\Windows\\Recent\\CustomDestinations\\f18460fded109990.customDestinations-ms",
+      "family": "jumplist",
+      "account": "eugene",
+      "supplied_sha256": "90bf6baa6f968a285f88620fbf91e1f5aa3e66e2bad50fd16f37913280ad8228"
+    }
+  ],
+  "collection_omissions": [
+    "Jump Lists only: Edge History, LNK, Prefetch, UserAssist and Recycle Bin were not supplied",
+    "NTFS index files ($I30) in both Jump List folders were not supplied as sources"
+  ]
+}

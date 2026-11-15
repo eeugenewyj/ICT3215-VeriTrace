@@ -73,7 +73,7 @@ version is rejected.
 | Family | Tool | Desktop validation (recorded in [tools-setup](docs/tools-setup.md)) | Kali development VM build (15 Nov 2026) |
 | --- | --- | --- | --- |
 | lnk | LECmd | 2026.5.0 | 2026.10.4 |
-| jumplist | JLECmd | 2026.5.0 | 2026.10.6 (profile drafted, not enabled) |
+| jumplist | JLECmd | 2026.5.0 | 2026.10.6 |
 | prefetch | PECmd | 2026.5.0 | 2026.10.3 (profile drafted, not enabled) |
 | recyclebin | RBCmd | 2026.5.0 | 2026.10.1 |
 | userassist | RECmd + RegistryPlugin.UserAssist 0.5 | 2026.5.0 | not built yet |
