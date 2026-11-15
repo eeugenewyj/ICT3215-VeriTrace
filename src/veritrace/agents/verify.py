@@ -5,9 +5,10 @@ from pydantic import ValidationError
 from ..errors import CitationError, ContextOverflowError, IntegrityError, ModelError, VeriTraceError, WorkflowError
 from .claims import compact_schema, load_prompt
 from .citations import validate_citations
+from .context import deduplicate_record_messages
 from ..runtime.client import ModelTurn
 from .models import Assessment, VerificationResult
-from .hints import claim_view, coverage_view, search_hint
+from .hints import claim_view, coverage_view, tool_search_hint
 from .timecheck import time_agrees, time_conflict
 from .tools import compact_coverage, model_view, tool_definitions
 
@@ -23,7 +24,7 @@ def execute_request(turn, tools, *, claim_id):
             raise
         except VeriTraceError as exc:
             result = {"error": {"code": exc.code, "message": str(exc)}}
-        responses.append({"role": "tool", "tool_name": name, "content": json.dumps(model_view(name, result), ensure_ascii=False, separators=(",", ":"))})
+        responses.append({"role": "tool", "tool_name": name, "content": json.dumps(model_view(name, result, source_timezone=tools.case.manifest.source_timezone), ensure_ascii=False, separators=(",", ":"))})
     return responses
 
 
@@ -50,7 +51,7 @@ def verify_claims(case, claims, client, budget, tools):
     definitions = tool_definitions(case.manifest.case_id, ["search_records", "get_record", "get_source_coverage"])
     schema = compact_schema(Assessment.model_json_schema())
     for claim in claims:
-        messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "source_timezone": case.manifest.source_timezone, "claim": claim_view(claim, claims), "search_hint": search_hint(claim, claims, tools.coverage), "coverage": coverage_view(tools.coverage)}, ensure_ascii=False, separators=(",", ":"))}]
+        messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "source_timezone": case.manifest.source_timezone, "claim": claim_view(claim, claims), "search_hint": tool_search_hint(case.manifest.case_id, claim, claims, tools.coverage), "coverage": coverage_view(tools.coverage)}, ensure_ascii=False, separators=(",", ":"))}]
         count, repairs, missing_search, stopped_early = 0, 0, 0, False
         try:
             while True:
@@ -72,6 +73,7 @@ def verify_claims(case, claims, client, budget, tools):
                         raise WorkflowError("Twelve tool calls exhausted for this claim")
                     count += len(turn.tool_calls)
                     messages.extend([turn.as_assistant_message(), *execute_request(turn, tools, claim_id=claim.claim_id)])
+                    tools.context_compactions += deduplicate_record_messages(messages)
                     continue
                 if not any(r.claim_id == claim.claim_id and r.name == "search_records" and r.error is None for r in tools.ledger.entries):
                     if missing_search == 2:

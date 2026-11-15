@@ -72,3 +72,22 @@ def test_pronoun_target_is_replaced_by_the_nearest_named_file_for_the_model():
     assert claim_view(alone[0], alone)["target"] == "it"  # nothing to borrow
     nearest = [claim("a", "download_file", "a.pdf"), claim("b", "open_document", "b.pdf"), claim("c", "recycle_file", "it")]
     assert claim_view(nearest[2], nearest)["target"] == "b.pdf"
+
+
+def test_tool_search_hint_matches_the_actual_nested_argument_schema():
+    from veritrace.agents.hints import tool_search_hint
+    from veritrace.agents.tools import SearchArgs
+    proposal = tool_search_hint("case01", CLAIMS[1], CLAIMS)
+    args = SearchArgs.model_validate(proposal["arguments"])
+    assert proposal["name"] == "search_records"
+    assert args.case_id == "case01" and args.filters.family == "lnk" and args.filters.target == "sample"
+    assert proposal["then_try_families"] == ["jumplist", "edge_history"]
+    assert "then_try_families" not in proposal["arguments"]
+    only_jumplists = tool_search_hint("case01", CLAIMS[1], CLAIMS, [entry("jumplist")])
+    assert SearchArgs.model_validate(only_jumplists["arguments"]).filters.family == "jumplist"
+
+
+def test_tool_search_hint_keeps_an_unactionable_claim_unresolved():
+    from veritrace.agents.hints import tool_search_hint
+    only = [claim("c", "visit_page", "it")]
+    assert tool_search_hint("case01", only[0], only) is None

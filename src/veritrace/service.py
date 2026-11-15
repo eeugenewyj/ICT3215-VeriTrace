@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 
 from .agents.claims import extract_claims, load_prompt
+from .agents.context import POLICY as CONTEXT_POLICY
 from .agents.citations import validate_citations
 from .agents.tools import ToolBackend, ToolLedger
 from .agents.verify import verify_claims
@@ -114,6 +115,8 @@ def run_case(input_dir: Path, output_dir: Path, settings, *, client=None, budget
         errors.append({"code": exc.code, "message": str(exc)})
     status = "error" if errors else "partial" if claim_errors or any(c.status == "failed" for c in coverage) else "complete"
     runtime = {"case_metadata": case.manifest.model_dump(mode="json", exclude={"items"}), "model_calls": getattr(client, "calls", None), "resource_measurements": "unknown; collect host observations during the desktop benchmark", "model": metadata, "settings": settings.model_dump(mode="json"), "prompt_hashes": {name: hashlib.sha256(load_prompt(name).encode()).hexdigest() for name in ("claims", "verify")}, "duration_s": time.perf_counter() - started, "enabled_families": settings.enabled_families, "gpu_backend": "unknown; retain desktop benchmark logs", "interpretation": "Available-evidence assessment; investigator makes final decision"}
+    runtime["context_compaction"] = {"policy": CONTEXT_POLICY, "record_projections_replaced": tools.context_compactions,
+                                     "scope": "Only identical repeated data is referenced; full tool receipts and records are retained."}
     names = ("report.html", "claims.json", "assessments.json", "coverage.json", "run.json", "tool_calls.jsonl", "evidence.sqlite", "registration.json")
     result = RunResult(run_id="run_" + uuid.uuid4().hex[:20], case_id=case.manifest.case_id, testimony=case.testimony, testimony_sha256=case.testimony_sha256, status=status, claims=claims, assessments=assessments, claim_errors=claim_errors, errors=errors, coverage=coverage, records=records, tool_receipts=ledger.entries, runtime_metadata=runtime, output_paths={n: str(case.working_root / n) for n in names})
     for name, values in (("claims", claims), ("assessments", assessments), ("coverage", coverage)):

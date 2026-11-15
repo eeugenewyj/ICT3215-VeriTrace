@@ -5,9 +5,13 @@ model extracts atomic claims, requests forensic parsing and bounded evidence
 queries, and produces an offline HTML report with source-linked assessments.
 The investigator reviews the complete report and makes the final decision.
 
-The backend prototype is implemented. **Live desktop-model and victim-sample
-validation are pending.** Unit tests and an upstream parser fixture check do
-not establish forensic accuracy. See [implementation status](docs/implementation-status.md).
+The backend prototype is implemented. The [desktop model benchmark](docs/desktop-benchmark.md)
+passed with local qwen3:8b, including an 8,192-token refresh on 14 November 2026.
+**Five parser families have recorded victim-source comparison passes; Edge needs
+a nonempty sample.** Focused [Jump List integration](docs/jumplist-contribution.md)
+also passed genuine local-model runs. Unit tests, parser comparisons and synthetic
+benchmarks do not establish classification accuracy. See
+[implementation status](docs/implementation-status.md) for remaining evaluation work.
 
 ## Start here
 
@@ -26,7 +30,9 @@ Windows 10 Pro victim VM; development and analysis use investigator working
 copies. Only victim acquisitions enter VeriTrace.
 
 ```powershell
-Copy-Item veritrace.example.toml veritrace.local.toml
+if (-not (Test-Path -LiteralPath veritrace.local.toml)) {
+    Copy-Item veritrace.example.toml veritrace.local.toml
+}
 uv run veritrace doctor --config veritrace.local.toml
 uv run veritrace benchmark --config veritrace.local.toml --output .runs/benchmark.json
 # After a passing benchmark and parser sample validation:
