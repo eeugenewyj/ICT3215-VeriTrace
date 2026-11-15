@@ -8,10 +8,17 @@ parser_timeout_s = 120
 enabled_families = ["edge_history", "userassist"]
 # Add after a successful desktop benchmark:
 budget_profile = ".runs/benchmark.budget.json"
-# tokenizer_path = ".external/qwen3-tokenizer.json"
+tokenizer_path = ".external/qwen3-tokenizer.json"
 
 # Parser commands/profiles are added after compatibility validation.
 [parser_commands]
+userassist = [".external/RECmd/RECmd.exe"]
+
 [parser_versions]
+userassist = "2026.10.3"
+
 [parser_config_hashes]
+userassist = "DF74FA2F35EB0E5054C9F49ECCA6B56E50022BDFFEE8101185E37AC33E6482E7"
+
 [parser_profiles]
+userassist = ".external/RECmd/UserAssist.reb"
