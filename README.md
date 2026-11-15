@@ -56,6 +56,35 @@ versions, dependency hashes and acquired-sample comparisons must be configured
 before enabling them. Unavailable, failed, empty and unsupported sources are
 reported explicitly. The model cannot choose executable paths or arbitrary SQL.
 
+## Parser tools and versions
+
+Five of the six families use Eric Zimmerman's command-line tools
+([LECmd](https://github.com/EricZimmerman/LECmd),
+[JLECmd](https://github.com/EricZimmerman/JLECmd),
+[PECmd](https://github.com/EricZimmerman/PECmd),
+[RBCmd](https://github.com/EricZimmerman/RBCmd) and
+[RECmd](https://github.com/EricZimmerman/RECmd) with the
+[RegistryPlugins](https://github.com/EricZimmerman/RegistryPlugins) UserAssist
+decoder). Edge History uses [Hindsight](https://github.com/RyanDFIR/hindsight),
+which is not an Eric Zimmerman tool. Every executable, its dependency files and
+its version are pinned by hash in a private parser profile; a changed file or
+version is rejected.
+
+| Family | Tool | Desktop validation (recorded in [tools-setup](docs/tools-setup.md)) | Kali development VM build (15 Nov 2026) |
+| --- | --- | --- | --- |
+| lnk | LECmd | 2026.5.0 | 2026.10.4 |
+| jumplist | JLECmd | 2026.5.0 | 2026.10.6 (profile drafted, not enabled) |
+| prefetch | PECmd | 2026.5.0 | 2026.10.3 (profile drafted, not enabled) |
+| recyclebin | RBCmd | 2026.5.0 | 2026.10.1 |
+| userassist | RECmd + RegistryPlugin.UserAssist 0.5 | 2026.5.0 | not built yet |
+| edge_history | Hindsight | 2026.06 (pinned source 4cf136f) | 2026.06 |
+
+The Kali builds are compiled from the upstream source for .NET 10 and run with
+`dotnet <tool>.dll`; the desktop uses the released .NET 9 builds. The two
+environments therefore run different tool versions. A family counts as validated
+only for the version recorded in its profile and comparison record, so rerun the
+acquired-sample comparison before relying on a different version.
+
 Outputs include `report.html`, claims/assessments/coverage JSON, `run.json`,
 `registration.json`, `tool_calls.jsonl`, `evidence.sqlite` and retained raw
 parser output. Citations must match this case, a record returned for that claim,

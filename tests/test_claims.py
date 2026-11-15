@@ -188,3 +188,33 @@ def test_bounds_kept_when_the_sentence_states_a_date(tmp_path):
     claim = make_claim(text, time_expression="5 October 2026 at 2 PM", resolved_start=at, resolved_end=at)
     claims = extract_claims(case, ReplayClient.from_contents([batch(draft_payload(claim))]), TestBudget())
     assert claims[0].resolved_start == at
+
+
+@pytest.mark.parametrize("action,target,negated,expected,expected_negated", [
+    ("never_used", "Notepad", False, "launch_program", True),
+    ("used_program", "Notepad", False, "launch_program", False),
+    ("ran", "Calculator", False, "launch_program", False),
+    ("never_downloaded", "setup.exe", False, "download_file", True),
+    ("deleted_file", "old notes", False, "recycle_file", False),
+    ("never_used", "Notepad", True, "launch_program", True),
+    ("send_email", None, False, "send_email", False),          # no supported meaning: kept as stated
+    ("opened", "report.pdf", False, "opened", False),          # open may mean a document or a program: left alone
+    ("used", "report.pdf", False, "used", False),              # a document target is not a program launch
+])
+def test_invented_actions_are_mapped_onto_supported_ones_by_code(action, target, negated, expected, expected_negated):
+    from veritrace.agents.claims import normalize_action
+    from veritrace.agents.models import ClaimDraft
+    draft = ClaimDraft(claim_id="c1", sentence="x", action=action, target=target, actor="I", negated=negated, time_expression=None, resolved_start=None, resolved_end=None, uncertainty=[], interpretation_notes=[])
+    out = normalize_action(draft)
+    assert (out.action, out.negated) == (expected, expected_negated)
+    assert bool(out.interpretation_notes) == (out.action != action)
+
+
+def test_never_used_notepad_reaches_verification_as_a_negated_program_launch(tmp_path):
+    from veritrace.agents.claims import extract_claims
+    text = "I have never used Notepad on this computer."
+    case = registered(tmp_path, text)
+    claim = make_claim(text, action="never_used", target="Notepad", negated=False)
+    result = extract_claims(case, ReplayClient.from_contents([batch(draft_payload(claim))]), TestBudget())
+    assert (result[0].action, result[0].negated) == ("launch_program", True)
+    assert "never_used" in result[0].interpretation_notes[-1]

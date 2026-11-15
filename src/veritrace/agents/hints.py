@@ -6,6 +6,8 @@ shows an action, and which word of the claim names the file, are deterministic: 
 """
 import re
 
+from .timecheck import claimed_seconds, time_agrees
+
 # action -> evidence families that can show it, most direct first
 FAMILIES = {
     "download_file": ["edge_history"],
@@ -17,13 +19,64 @@ FAMILIES = {
 # Words that name a kind of thing rather than a particular file
 GENERIC = {"a", "an", "the", "it", "its", "this", "that", "these", "those", "them", "they", "one", "ones",
            "file", "files", "image", "images", "picture", "pictures", "photo", "photos", "document",
-           "documents", "item", "items", "thing", "things", "my", "our", "your", "of", "on", "in", "to"}
+           "documents", "item", "items", "thing", "things", "my", "our", "your", "of", "on", "in", "to",
+           "program", "programs", "application", "applications", "app", "apps", "software", "tool", "executable"}
 
 
 def target_word(target):
     """Longest non-generic word of the claim target, or None (for example for the pronoun 'it')."""
     words = [w for w in re.findall(r"[A-Za-z0-9._-]+", target or "") if w.lower() not in GENERIC]
     return max(words, key=len) if words else None
+
+
+def record_can_show(claim, record):
+    """Can this one record evidence the claimed action? Unknown actions are not judged.
+    Regression (acquired run, claim 'I opened it'): the model cited an Edge page visit and the Edge download
+    row, neither of which shows the file being opened (the download row even says opened=0), and left out the
+    LNK record that does. A browser record shows opening only when the browser itself flags it as opened."""
+    families = FAMILIES.get(claim.action)
+    if not families:
+        return True
+    if record.family not in families:
+        return False
+    if claim.action == "open_document" and record.family == "edge_history":
+        return str(record.raw_fields.get("opened")) in ("1", "True", "true")
+    return True
+
+
+def family_can_show(claim, records):
+    """False when the action is known and none of the records can show it. A Recycle Bin record cited for
+    'I never opened X' produced 'contradicted' in an acquired run; a deletion record says nothing about opening."""
+    return not FAMILIES.get(claim.action) or any(record_can_show(claim, r) for r in records)
+
+
+DOWNLOAD_ROLES = {"download_started", "download_completed"}
+
+
+def shows_action(claim, record, claims, source_timezone):
+    """Does this record show the claimed action on the claim's target (and at its stated clock time, if exact)?
+    Stricter than record_can_show: a page visit does not show a download, and a record for another file shows
+    nothing about this one. Used only to catch a verdict that contradicts the record the model itself cited."""
+    if not record_can_show(claim, record):
+        return False
+    word = target_word(resolved_target(claim, claims))
+    if word and word.lower() not in (record.target or "").lower():
+        return False
+    if claim.action == "download_file" and not any(t.role in DOWNLOAD_ROLES for t in record.times):
+        return False
+    if claimed_seconds(claim.time_expression) is not None and not time_agrees(claim, [record], source_timezone):
+        return False
+    return True
+
+
+def consistency_problem(claim, status):
+    """What is wrong with this status, given that a cited record shows the action. None when nothing is."""
+    if claim.negated and status == "supported":
+        return "This claim is a denial, and the cited records show the action did happen. A denial cannot be 'supported' by that. Answer contradicted if the records match the claim's target and time, otherwise inconclusive."
+    if status == "unverified":
+        verdict = "contradicted (the claim is a denial)" if claim.negated else "supported"
+        return f"You cited a record that shows this action on this target, so 'unverified' (no relevant evidence) is wrong. Answer {verdict}, or inconclusive if a limit prevents it."
+    return None
 
 
 def parsed_families(coverage):

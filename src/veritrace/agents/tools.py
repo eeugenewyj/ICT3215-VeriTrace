@@ -64,7 +64,7 @@ ARGUMENTS = {"extract_case": CaseArgs, "search_records": SearchArgs, "get_record
 # compact_schema, so the guidance lives here.
 DESCRIPTIONS = {
     "extract_case": "Parse the registered case evidence into records. Already done before claims are assessed.",
-    "search_records": "Search evidence records; filters are optional and combine with AND. family: edge_history (downloads, page visits), lnk (file-target context), recyclebin (files deleted), jumplist (application-associated destinations/tasks), prefetch or userassist (program activity). target: substring of the file name, path or URL (a distinctive word such as sample or .pdf, never a pronoun). account. start and end: ISO-8601 with timezone. time_role: an exact role such as download_started, visit_time, destlist_entry_modified or recycle_bin_deletion, never a clock time. There is no action filter. Use limit 5. Times are UTC.",
+    "search_records": "Search evidence records; filters are optional and combine with AND. family: edge_history (downloads, page visits), lnk (file-target context), recyclebin (files deleted), jumplist (application-associated destinations/tasks), prefetch or userassist (program activity). target: substring of the file name, path or URL (a distinctive word such as sample or .pdf, never a pronoun). account. start and end: ISO-8601 with timezone. time_role: an exact role such as download_started, visit_time, destlist_entry_modified or recycle_bin_deletion, never a clock time. There is no action filter. Use limit 5. Record times are shown in the witness's local time.",
     "get_record": "Fetch additional selected parser details by the record_id returned from a search.",
     "get_source_coverage": "List which evidence sources were parsed, unsupported or failed.",
 }
@@ -113,15 +113,23 @@ def compact_record(record, source_timezone=None, *, detailed=False):
         # them in the full record, explicitly naming omitted roles in this view.
         times = [t for t in record.times if t.role == "destlist_entry_modified"]
         omitted = sorted({t.role for t in record.times if t.role != "destlist_entry_modified"})
-        if source_timezone:
-            try:
-                zone = ZoneInfo(source_timezone)
-            except (ZoneInfoNotFoundError, ValueError):
-                zone_error = True
+    if source_timezone:
+        try:
+            zone = ZoneInfo(source_timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            zone_error = True
+    # Regression (acquired LNK/Recycle Bin run): the model was shown UTC and the witness spoke in local time,
+    # so it reasoned "21:01 UTC" against "3 pm" and got the arithmetic wrong. Clock conversion is code's job:
+    # every family shows the witness's local time. Jump Lists keep UTC beside it (existing, tested view).
+    def shown(t):
+        if not t.normalized_utc:
+            return {"role": t.role, "utc": None}
+        stamp = t.normalized_utc.astimezone(timezone.utc)
+        if zone and record.family != "jumplist":
+            return {"role": t.role, "local": stamp.astimezone(zone).isoformat(timespec="seconds")}
+        return {"role": t.role, "utc": stamp.strftime("%Y-%m-%dT%H:%M:%SZ"), **({"local": stamp.astimezone(zone).isoformat(timespec="seconds")} if zone else {})}
     out = {"record_id": record.record_id, "family": record.family, "target": record.target,
-           "times": [{"role": t.role, "utc": t.normalized_utc.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") if t.normalized_utc else None,
-                      **({"local": t.normalized_utc.astimezone(zone).isoformat(timespec="seconds")} if zone and t.normalized_utc else {}),
-                      **({"uncertainty": t.uncertainty} if t.uncertainty else {})} for t in times]}
+           "times": [{**shown(t), **({"uncertainty": t.uncertainty} if t.uncertainty else {})} for t in times]}
     if record.family == "jumplist":
         # The same target can occur in Quick Access and Notepad lists. Keep its
         # application association visible before the model chooses a record.
@@ -136,8 +144,8 @@ def compact_record(record, source_timezone=None, *, detailed=False):
             out["omitted_noninteraction_time_roles"] = omitted
         if zone:
             out["source_timezone"] = source_timezone
-        elif zone_error:
-            out["local_time_note"] = "Source timezone unavailable; local time was not inferred."
+    if zone_error:
+        out["local_time_note"] = "Source timezone unavailable; local time was not inferred."
     generic = GENERIC_LIMITATIONS | (JUMPLIST_GENERIC_LIMITATIONS if record.family == "jumplist" else set())
     notes = [n for n in record.limitations if n not in generic]
     if notes:

@@ -37,6 +37,34 @@ MONTH = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*"
 DATE_HINT = re.compile(rf"\b(?:19|20)\d{{2}}\b|\b\d{{1,2}}[/-]\d{{1,2}}\b|\b\d{{1,2}}(?:st|nd|rd|th)?\s+{MONTH}\b|\b{MONTH}\s+\d{{1,2}}\b", re.I)
 NO_DATE_NOTE = "Resolved time bounds dropped: the sentence states no date and the case has no reference time"
 
+SUPPORTED_ACTIONS = ("download_file", "open_document", "launch_program", "recycle_file")
+NEGATION_WORDS = {"never", "not", "no", "didnt", "dont"}
+# Verbs that unambiguously name one supported action. "open" is left out: it could mean a document or a program.
+VERB_ACTION = {**{v: "launch_program" for v in ("use", "used", "using", "run", "ran", "running", "execute", "executed", "start", "started", "launch", "launched")},
+               **{v: "download_file" for v in ("download", "downloaded")},
+               **{v: "recycle_file" for v in ("delete", "deleted", "remove", "removed", "trash", "trashed", "recycle", "recycled")}}
+DOCUMENT_TARGET = re.compile(r"\.(?:pdf|docx?|xlsx?|pptx?|txt|rtf|csv|jpe?g|png|gif|bmp|zip|rar|7z)\b", re.I)
+
+
+def normalize_action(draft):
+    """Map an invented action such as never_used onto a supported one, moving any negation into `negated`.
+
+    Regression (Prefetch review): for "I have never used Notepad" qwen3:8b returned action never_used with
+    negated=false, which has no supported verification and ended the claim as an operational error. The
+    prompt tells it to preserve unsupported actions, so this is code, not another prompt rule.
+    """
+    if draft.action in SUPPORTED_ACTIONS:
+        return draft
+    words = [w for w in re.split(r"[\s_-]+", draft.action.casefold()) if w]
+    negated = any(w in NEGATION_WORDS for w in words)
+    verbs = [w for w in words if w not in NEGATION_WORDS]
+    action = VERB_ACTION.get(verbs[0]) if verbs else None
+    if action is None or (action == "launch_program" and DOCUMENT_TARGET.search(draft.target or "")):
+        return draft
+    note = f"The host read the action {draft.action!r} as {action}" + (" with the claim negated" if negated and not draft.negated else "")
+    return draft.model_copy(update={"action": action, "negated": draft.negated or negated, "interpretation_notes": [*draft.interpretation_notes, note]})
+
+
 PLACEHOLDERS = {"", "-", "none", "n/a", "na", "nil", "null", "no", "not applicable", "no uncertainty"}
 
 
@@ -76,6 +104,7 @@ def extract_claims(case, client, budget):
                     raise ValueError("Duplicate claim ID")
                 ids.add(draft.claim_id)
                 draft = draft.model_copy(update={"uncertainty": without_placeholders(draft.uncertainty), "interpretation_notes": without_placeholders(draft.interpretation_notes)})
+                draft = normalize_action(draft)
                 stated = draft.time_expression
                 if stated is not None and (not stated.strip() or stated.casefold() not in case.testimony.casefold()):
                     raise ValueError(f"time_expression {stated!r} is not words from the testimony; copy the witness's own words for the time, or use null when no time was stated")
