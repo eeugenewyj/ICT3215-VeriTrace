@@ -2,6 +2,7 @@ import json
 
 from pydantic import ValidationError
 
+from .. import progress
 from ..errors import CitationError, ContextOverflowError, IntegrityError, ModelError, VeriTraceError, WorkflowError
 from .claims import SUPPORTED_ACTIONS, compact_schema, load_prompt
 from .citations import validate_citations
@@ -79,6 +80,7 @@ def execute_request(turn, tools, *, claim_id):
             raise
         except VeriTraceError as exc:
             result = {"error": {"code": exc.code, "message": str(exc)}}
+        progress.tool_call(name, args, result)
         responses.append({"role": "tool", "tool_name": name, "content": json.dumps(model_view(name, result, source_timezone=tools.case.manifest.source_timezone), ensure_ascii=False, separators=(",", ":"))})
     return responses
 
@@ -101,18 +103,22 @@ def require_extraction(case, client, budget, tools):
 
 def verify_claims(case, claims, client, budget, tools):
     require_extraction(case, client, budget, tools)
+    progress.evidence_available(tools.coverage)
     assessments, errors = [], {}
     # extract_case already ran; leaving its definition out saves context the small model needs.
     definitions = tool_definitions(case.manifest.case_id, ["search_records", "get_record", "get_source_coverage"])
     schema = compact_schema(Assessment.model_json_schema())
     for claim in claims:
         if claim.action not in SUPPORTED_ACTIONS:
+            progress.out_of_coverage(claim)
             # Regression (Prefetch review): the model searched, found Notepad had run 12 times, answered
             # 'contradicted', and the host rejected that twice, so the claim ended as an error with no
             # assessment. The prototype cannot verify this action; say so instead of asking a model.
             assessments.append(Assessment(claim_id=claim.claim_id, status="unverified", cited_record_ids=[], justification=f"The claimed action '{claim.action}' is outside what this prototype can verify, so no evidence was searched for it.", alternative_explanations=[], limitations=["Action outside prototype coverage; a missing assessment is not evidence that the action did or did not occur"]))
             continue
-        messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "source_timezone": case.manifest.source_timezone, "claim": claim_view(claim, claims), "search_hint": tool_search_hint(case.manifest.case_id, claim, claims, tools.coverage), "coverage": coverage_view(tools.coverage)}, ensure_ascii=False, separators=(",", ":"))}]
+        hint = tool_search_hint(case.manifest.case_id, claim, claims, tools.coverage)
+        progress.claim_started(claim, hint)
+        messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "source_timezone": case.manifest.source_timezone, "claim": claim_view(claim, claims), "search_hint": hint, "coverage": coverage_view(tools.coverage)}, ensure_ascii=False, separators=(",", ":"))}]
         count, repairs, missing_search, stopped_early, made = 0, 0, 0, None, set()
         compacted = None
         held, final_next, nudge, first_status = None, False, None, None
@@ -134,11 +140,13 @@ def verify_claims(case, claims, client, budget, tools):
                     if not searched:
                         raise
                     stopped_early = "the model context budget was reached"
+                    progress.host("retrieval stopped because the model context budget was reached; assessing from what was found")
                     turn = ModelTurn(content="")
                 if turn.tool_calls and searched and all(call_key(c) in made for c in turn.tool_calls):
                     # Regression (acquired run): the model repeated one identical search twelve times and never
                     # answered. An identical call returns identical records, so stop retrieving and assess.
                     stopped_early = "the model repeated a search it had already made"
+                    progress.host("the model repeated a search it had already made; no further retrieval, assessing from what was found")
                     turn = ModelTurn(content="")
                 if turn.tool_calls:
                     made.update(call_key(c) for c in turn.tool_calls)
@@ -165,6 +173,7 @@ def verify_claims(case, claims, client, budget, tools):
                         if fitted is None:
                             raise
                         final_messages, kept, total = fitted
+                        progress.host("the full retrieval transcript did not fit the model context; asking again with a compact view of the retrieved records")
                         compacted = f"the full retrieval transcript did not fit the model context, so the answer was assessed from a compact view of {kept} of {total} retrieved records"
                     else:
                         # Regression (run 26, 4,096 context): the correction request did not fit beside the whole search
@@ -185,6 +194,7 @@ def verify_claims(case, claims, client, budget, tools):
                     if claim.action not in ("download_file", "open_document", "launch_program", "recycle_file") and assessment.status in ("supported", "contradicted"):
                         raise CitationError("Action outside prototype coverage cannot receive a positive assessment")
                     validate_citations(case, assessment, tools.index, tools.ledger)
+                    progress.draft_verdict(assessment)
                     if assessment.status in ("supported", "contradicted"):
                         cited = [tools.index.get(case.manifest.case_id, rid) for rid in assessment.cited_record_ids]
                         if not family_can_show(claim, cited):
@@ -195,6 +205,7 @@ def verify_claims(case, claims, client, budget, tools):
                                 # The right records were retrieved but not cited; ask once more before withholding.
                                 held = assessment
                                 raise VerdictNudge(f"The cited {kinds} records cannot show this action. Records you already retrieved from {', '.join(usable)} can; cite those if they support or contradict the claim, otherwise answer unverified")
+                            progress.host(f"the cited {kinds} records cannot show this action, so '{assessment.status}' was withheld")
                             assessment = assessment.model_copy(update={"status": "unverified", "justification": f"{assessment.justification} Host check: the cited records ({kinds}) cannot show this action, so '{assessment.status}' was withheld.", "limitations": [*assessment.limitations, f"Status changed from {assessment.status} to unverified: no cited record is from a source that can show this action"]})
                     problem = consistency_problem(claim, assessment.status)
                     if problem:
@@ -205,15 +216,18 @@ def verify_claims(case, claims, client, budget, tools):
                             if repairs < 2:
                                 held = assessment
                                 raise VerdictNudge(problem)
+                            progress.host("the cited records show the action, which does not fit that verdict, so it was withheld")
                             assessment = withheld(assessment, "the cited records show the action, which does not fit that verdict")
                     if assessment.status == "supported":
                         cited = [tools.index.get(case.manifest.case_id, rid) for rid in assessment.cited_record_ids]
                         problem = time_conflict(claim, cited, case.manifest.source_timezone)
                         if problem:
+                            progress.host(f"time check - {progress.short(problem, 220)}; 'supported' withheld")
                             assessment = assessment.model_copy(update={"status": "inconclusive", "justification": f"{assessment.justification} Host time check: {problem}, so 'supported' was withheld.", "limitations": [*assessment.limitations, "Status changed from supported to inconclusive by the host time check"]})
                     if assessment.status == "contradicted" and not claim.negated:
                         cited = [tools.index.get(case.manifest.case_id, rid) for rid in assessment.cited_record_ids]
                         if time_agrees(claim, cited, case.manifest.source_timezone):
+                            progress.host("a cited record's time matches the stated time, so 'contradicted' was withheld")
                             assessment = assessment.model_copy(update={"status": "inconclusive", "justification": f"{assessment.justification} Host check: a cited record's time matches the witness's stated time, so 'contradicted' was withheld.", "limitations": [*assessment.limitations, "Status changed from contradicted to inconclusive by the host time check"]})
                     if first_status and assessment.status != first_status and not any(l.startswith("Status changed") for l in assessment.limitations):
                         assessment = assessment.model_copy(update={"limitations": [*assessment.limitations, f"Revised after a host check: the model's first answer was '{first_status}', which did not fit the records it cited"]})
@@ -227,6 +241,7 @@ def verify_claims(case, claims, client, budget, tools):
                     # Drop the rejected answer (~450 tokens at 4,096 context) and say only what is wrong with it.
                     repairs += 1
                     nudge, first_status = str(exc), first_status or held.status
+                    progress.host(f"the answer '{held.status}' did not fit the records it cited; asking the model again ({progress.short(exc, 140)})")
                     messages.append({"role": "user", "content": f"Your answer was rejected: {exc}"})
                     final_next = True
                 except (ValueError, ValidationError, CitationError) as exc:

@@ -4,6 +4,7 @@ import time
 import uuid
 from pathlib import Path
 
+from . import progress
 from .agents.claims import extract_claims, load_prompt
 from .agents.context import POLICY as CONTEXT_POLICY
 from .agents.citations import validate_citations
@@ -77,6 +78,7 @@ def run_case(input_dir: Path, output_dir: Path, settings, *, client=None, budget
     case = register_case(input_dir, output_dir)
     ledger = ToolLedger(case.working_root / "tool_calls.jsonl")
     ledger.path.touch(exist_ok=False)
+    progress.case_started(case)
     owned = client is None
     client = client or OllamaClient(settings)
     claims, assessments, records, claim_errors, errors, metadata = [], [], [], {}, [], {}
@@ -87,6 +89,7 @@ def run_case(input_dir: Path, output_dir: Path, settings, *, client=None, budget
             metadata = client.metadata()
             budget = budget or ContextBudget(settings, metadata)
             claims = extract_claims(case, client, budget)
+            progress.claims_extracted(claims)
             verification = verify_claims(case, claims, client, budget, tools)
             assessments, claim_errors = verification.assessments, verification.claim_errors
             coverage = tools.coverage

@@ -3,6 +3,7 @@ import json
 import sys
 from pathlib import Path
 
+from . import progress
 from .errors import InputError, VeriTraceError
 from .runtime.benchmark import benchmark
 from .runtime.budget import ContextBudget
@@ -30,6 +31,7 @@ def main(argv=None):
     try:
         settings = load_settings(args.config)
         if args.command == "evaluate":
+            progress.ENABLED = False  # many cases in a row; the metrics are the output
             from .evaluation.corpus import evaluate_corpus
             result = evaluate_corpus(args.corpus, args.output, settings, config_path=args.config)
             print(json.dumps(result["metrics"], ensure_ascii=False, indent=2))
@@ -37,7 +39,9 @@ def main(argv=None):
         if args.command == "run":
             from .service import run_case
             result = run_case(args.case, args.output, settings)
+            progress.final(result)
             print(json.dumps({"status": result.status, "report": result.output_paths["report.html"], "errors": result.errors, "claim_errors": result.claim_errors}, ensure_ascii=False, indent=2))
+            progress.warning()
             return {"complete": 0, "error": 3, "partial": 4}[result.status]
         with OllamaClient(settings) as client:
             metadata = client.metadata()
