@@ -35,6 +35,34 @@ def compact_correction(case, claim, claims, records, nudge):
             {"role": "user", "content": "Return the assessment JSON for this claim using only the cited records above."}]
 
 
+def compact_final(case, claim, claims, tools, budget, schema):
+    """A small context for the final answer when the whole retrieval transcript does not fit beside the answer schema.
+
+    Regression (held-out PDF run, 4,096 context): an Edge search, a LNK search and a full LNK get_record left no room for
+    the answer, and with no earlier verdict to fall back on the claim ended as a context_limit error with no assessment.
+    The records the model retrieved are in the ledger, so ask again with only their compact views, most relevant first,
+    dropping the last ones until the request fits. Returns (messages, kept, total), or None when not even one fits.
+    """
+    seen = []
+    for entry in tools.ledger.entries:
+        if entry.claim_id == claim.claim_id and entry.error is None:
+            seen.extend(rid for rid in entry.returned_record_ids if rid not in seen)
+    records = [tools.index.get(case.manifest.case_id, rid) for rid in seen]
+    records.sort(key=lambda r: not record_can_show(claim, r))  # stable: records that can show the action come first
+    zone = case.manifest.source_timezone
+    for keep in range(len(records), 0, -1):
+        body = {"case_id": case.manifest.case_id, "source_timezone": zone, "claim": claim_view(claim, claims), "retrieved_records": [compact_record(r, zone) for r in records[:keep]]}
+        messages = [{"role": "system", "content": load_prompt("verify")},
+                    {"role": "user", "content": json.dumps(body, ensure_ascii=False, separators=(",", ":"))},
+                    {"role": "user", "content": "Retrieval is finished. Return the assessment JSON for this claim using only the retrieved records above."}]
+        try:
+            budget.ensure(messages, None, schema)
+        except ContextOverflowError:
+            continue
+        return messages, keep, len(records)
+    return None
+
+
 def call_key(call):
     function = call.get("function", {})
     return function.get("name", ""), json.dumps(function.get("arguments", {}), sort_keys=True, default=str)
@@ -86,6 +114,7 @@ def verify_claims(case, claims, client, budget, tools):
             continue
         messages = [{"role": "system", "content": load_prompt("verify")}, {"role": "user", "content": json.dumps({"case_id": case.manifest.case_id, "source_timezone": case.manifest.source_timezone, "claim": claim_view(claim, claims), "search_hint": tool_search_hint(case.manifest.case_id, claim, claims, tools.coverage), "coverage": coverage_view(tools.coverage)}, ensure_ascii=False, separators=(",", ":"))}]
         count, repairs, missing_search, stopped_early, made = 0, 0, 0, None, set()
+        compacted = None
         held, final_next, nudge, first_status = None, False, None, None
         try:
             while True:
@@ -131,15 +160,21 @@ def verify_claims(case, claims, client, budget, tools):
                     budget.ensure(final_messages, None, schema)
                 except ContextOverflowError:
                     if held is None:
-                        raise
-                    # Regression (run 26, 4,096 context): the correction request did not fit beside the whole search
-                    # transcript. Ask again with only the claim and the records the model itself cited.
-                    final_messages = compact_correction(case, claim, claims, assessments_cited(tools, case, held), nudge)
-                    try:
-                        budget.ensure(final_messages, None, schema)
-                    except ContextOverflowError:
-                        assessments.append(withheld(held, "the model context budget was reached before it could be asked to correct the verdict"))
-                        break
+                        # Nothing to correct yet, so the transcript itself does not fit: answer from the retrieved records alone.
+                        fitted = compact_final(case, claim, claims, tools, budget, schema)
+                        if fitted is None:
+                            raise
+                        final_messages, kept, total = fitted
+                        compacted = f"the full retrieval transcript did not fit the model context, so the answer was assessed from a compact view of {kept} of {total} retrieved records"
+                    else:
+                        # Regression (run 26, 4,096 context): the correction request did not fit beside the whole search
+                        # transcript. Ask again with only the claim and the records the model itself cited.
+                        final_messages = compact_correction(case, claim, claims, assessments_cited(tools, case, held), nudge)
+                        try:
+                            budget.ensure(final_messages, None, schema)
+                        except ContextOverflowError:
+                            assessments.append(withheld(held, "the model context budget was reached before it could be asked to correct the verdict"))
+                            break
                 turn = client.chat(final_messages, schema=schema)
                 if turn.tool_calls:
                     raise ModelError("Final assessment returned tool calls instead of JSON")
@@ -184,6 +219,8 @@ def verify_claims(case, claims, client, budget, tools):
                         assessment = assessment.model_copy(update={"limitations": [*assessment.limitations, f"Revised after a host check: the model's first answer was '{first_status}', which did not fit the records it cited"]})
                     if stopped_early:
                         assessment = assessment.model_copy(update={"limitations": [*assessment.limitations, f"Retrieval stopped early because {stopped_early}; assessed from the records retrieved so far"]})
+                    if compacted:
+                        assessment = assessment.model_copy(update={"limitations": [*assessment.limitations, f"Assessed from a reduced view: {compacted}"]})
                     assessments.append(assessment)
                     break
                 except VerdictNudge as exc:

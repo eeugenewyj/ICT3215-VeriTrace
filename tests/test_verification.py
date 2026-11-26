@@ -256,3 +256,60 @@ def test_claim_outside_coverage_is_answered_unverified_by_the_host_without_askin
     assert assessment.status == "unverified" and assessment.cited_record_ids == [] and "send_email" in assessment.justification
     assert [r.name for r in tools.ledger.entries] == ["extract_case"] and len(client.requests) == 1
     tools.index.connection.close()
+
+
+def test_final_answer_that_does_not_fit_with_the_transcript_is_asked_with_only_the_retrieved_records(tmp_path):
+    """Regression (held-out PDF run, 4,096 context): searches plus a full record left no room for the answer, and with no
+    earlier verdict the claim ended as a context_limit error instead of an assessment."""
+    from veritrace.agents.verify import verify_claims
+    from veritrace.errors import ContextOverflowError
+    class TranscriptTooBig:
+        def ensure(self, messages, tools, schema):
+            if schema is not None and any(m["role"] == "tool" for m in messages):
+                raise ContextOverflowError("does not fit")
+    case, tools = backend(tmp_path)
+    add_download_record(tools)
+    client = ReplayClient([call("extract_case", {"case_id": "case01"}), call("search_records", {"case_id": "case01", "filters": {}, "cursor": None}), finished(), verdict("supported", ["2" * 64])])
+    result = verify_claims(case, [make_claim()], client, TranscriptTooBig(), tools)
+    assert not result.claim_errors
+    assessment = result.assessments[0]
+    assert assessment.status == "supported" and assessment.cited_record_ids == ["2" * 64]
+    assert any(l.startswith("Assessed from a reduced view") for l in assessment.limitations)
+    last = client.requests[-1]["messages"]
+    assert not any(m["role"] == "tool" for m in last) and any("2" * 64 in str(m["content"]) for m in last)
+    tools.index.connection.close()
+
+
+def test_final_answer_drops_the_least_relevant_records_until_it_fits(tmp_path):
+    from veritrace.agents.verify import verify_claims
+    from veritrace.errors import ContextOverflowError
+    class OnlyOneRecordFits:
+        def ensure(self, messages, tools, schema):
+            if schema is None:
+                return
+            if any(m["role"] == "tool" for m in messages):
+                raise ContextOverflowError("does not fit")
+            if str(messages).count('"record_id"') > 1:
+                raise ContextOverflowError("does not fit")
+    case, tools = backend(tmp_path)
+    add_download_record(tools)
+    client = ReplayClient([call("extract_case", {"case_id": "case01"}), call("search_records", {"case_id": "case01", "filters": {}, "cursor": None}), finished(), verdict("supported", ["2" * 64])])
+    result = verify_claims(case, [make_claim()], client, OnlyOneRecordFits(), tools)
+    assert not result.claim_errors and result.assessments[0].status == "supported"
+    assert any("1 of 2 retrieved records" in l for l in result.assessments[0].limitations)
+    tools.index.connection.close()
+
+
+def test_final_answer_that_fits_in_no_form_is_still_a_context_error(tmp_path):
+    from veritrace.agents.verify import verify_claims
+    from veritrace.errors import ContextOverflowError
+    class NothingFits:
+        def ensure(self, messages, tools, schema):
+            if schema is not None:
+                raise ContextOverflowError("does not fit")
+    case, tools = backend(tmp_path)
+    add_download_record(tools)
+    client = ReplayClient([call("extract_case", {"case_id": "case01"}), call("search_records", {"case_id": "case01", "filters": {}, "cursor": None}), finished()])
+    result = verify_claims(case, [make_claim()], client, NothingFits(), tools)
+    assert not result.assessments and result.claim_errors["claim01"]["code"] == "context_limit"
+    tools.index.connection.close()
