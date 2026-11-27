@@ -23,12 +23,20 @@ def main(argv=None):
     run.add_argument("--config", type=Path, required=True)
     run.add_argument("--case", type=Path, required=True)
     run.add_argument("--output", type=Path, required=True)
+    report = commands.add_parser("report", help="Regenerate a recorded report without model inference")
+    report.add_argument("--run", type=Path, required=True)
+    report.add_argument("--output", type=Path, required=True)
+    report.add_argument("--diagnostics", type=Path)
     evaluate = commands.add_parser("evaluate", help="Evaluate a frozen labelled corpus")
     evaluate.add_argument("--config", type=Path, required=True)
     evaluate.add_argument("--corpus", type=Path, required=True)
     evaluate.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "report":
+            from .report.review import regenerate_report
+            print(json.dumps(regenerate_report(args.run, args.output, args.diagnostics), ensure_ascii=False, indent=2))
+            return 0
         settings = load_settings(args.config)
         if args.command == "evaluate":
             progress.ENABLED = False  # many cases in a row; the metrics are the output
