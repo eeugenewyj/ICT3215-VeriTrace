@@ -38,31 +38,96 @@ DATE_HINT = re.compile(rf"\b(?:19|20)\d{{2}}\b|\b\d{{1,2}}[/-]\d{{1,2}}\b|\b\d{{
 NO_DATE_NOTE = "Resolved time bounds dropped: the sentence states no date and the case has no reference time"
 
 SUPPORTED_ACTIONS = ("download_file", "open_document", "launch_program", "recycle_file")
-NEGATION_WORDS = {"never", "not", "no", "didnt", "dont"}
+NEGATION_WORDS = {"never", "not", "no"}
+AUXILIARIES = {"do", "did", "does", "have", "has", "had", "is", "was", "were", "been", "be"}
+CONTRACTIONS = {word: auxiliary + " not" for auxiliary in ("do", "did", "does", "have", "has", "had", "is", "was", "were")
+                for word in (auxiliary + "n't", auxiliary + "nt")}
 # Verbs that unambiguously name one supported action. "open" is left out: it could mean a document or a program.
 VERB_ACTION = {**{v: "launch_program" for v in ("use", "used", "using", "run", "ran", "running", "execute", "executed", "start", "started", "launch", "launched")},
-               **{v: "download_file" for v in ("download", "downloaded")},
+               **{v: "download_file" for v in ("download", "downloaded", "downloading")},
                **{v: "recycle_file" for v in ("delete", "deleted", "remove", "removed", "trash", "trashed", "recycle", "recycled")}}
+ACTION_SUFFIXES = {"download_file": {(), ("file",), ("files",)},
+                   "recycle_file": {(), ("file",), ("files",)},
+                   "launch_program": {(), ("program",), ("application",), ("app",)},
+                   "open_document": {("document",), ("file",)}}
 DOCUMENT_TARGET = re.compile(r"\.(?:pdf|docx?|xlsx?|pptx?|txt|rtf|csv|jpe?g|png|gif|bmp|zip|rar|7z)\b", re.I)
+ACTION_CUES = {
+    "download_file": re.compile(r"\bdownload(?:ed|ing|s)?\b", re.I),
+    "open_document": re.compile(r"\b(?:open(?:ed|ing|s)?|read(?:ing)?|view(?:ed|ing|s)?|access(?:ed|ing)?|inspect(?:ed|ing)?|look(?:ed|ing)?\s+at)\b", re.I),
+    "launch_program": re.compile(r"\b(?:launch(?:ed|ing)?|start(?:ed|ing)?|execut(?:e|ed|ing)|run|ran|running|use|used|using|open(?:ed|ing|s)?)\b", re.I),
+    "recycle_file": re.compile(r"\b(?:delet(?:e|ed|ing)|remov(?:e|ed|ing)|trash(?:ed|ing)?|recycl(?:e|ed|ing)|mov(?:e|ed|ing)\b.*\b(?:recycle\s+bin|trash))\b", re.I),
+}
 
 
 def normalize_action(draft):
-    """Map an invented action such as never_used onto a supported one, moving any negation into `negated`.
+    """Canonicalize a single clear action label, preserving polarity and an audit note.
 
-    Regression (Prefetch review): for "I have never used Notepad" qwen3:8b returned action never_used with
-    negated=false, which has no supported verification and ended the claim as an operational error. The
-    prompt tells it to preserve unsupported actions, so this is code, not another prompt rule.
+    Do not infer polarity from the whole source sentence: distinct actions can share it.
+    Compound/qualified labels involving a supported verb need model repair, not a guess
+    based on their first word. Genuinely unsupported activities keep their action names.
     """
+    if draft.action.strip().casefold() in PLACEHOLDERS | {"unknown", "unsupported"}:
+        raise ValueError("action must name the asserted activity, not a placeholder; use a canonical action for supported activities, preserve actual unsupported activities, and keep denial in negated")
     if draft.action in SUPPORTED_ACTIONS:
         return draft
-    words = [w for w in re.split(r"[\s_-]+", draft.action.casefold()) if w]
-    negated = any(w in NEGATION_WORDS for w in words)
-    verbs = [w for w in words if w not in NEGATION_WORDS]
-    action = VERB_ACTION.get(verbs[0]) if verbs else None
-    if action is None or (action == "launch_program" and DOCUMENT_TARGET.search(draft.target or "")):
+    words = [part for word in re.split(r"[\s_-]+", draft.action.strip().casefold().replace("\u2019", "'"))
+             for part in CONTRACTIONS.get(word, word).split()]
+    verbs = VERB_ACTION | {"open": "open_document", "opened": "open_document"}
+    positions = [i for i, word in enumerate(words) if word in verbs]
+    if not positions:
         return draft
+    pos = positions[0]
+    action = verbs[words[pos]]
+    prefix, suffix = words[:pos], tuple(words[pos + 1:])
+    # Bare 'opened' can refer to a program as well as a document. 'used' with a
+    # document target is likewise ambiguous; keep the existing coverage behavior.
+    if not prefix and not suffix and (action == "open_document" or (action == "launch_program" and DOCUMENT_TARGET.search(draft.target or ""))):
+        return draft
+    negations = sum(word in NEGATION_WORDS for word in prefix)
+    clear_prefix = all(word in AUXILIARIES | NEGATION_WORDS for word in prefix)
+    if (len(positions) != 1 or negations > 1 or any(word in {"and", "or", "only"} for word in words)
+            or (negations and not clear_prefix) or (prefix and not suffix and action == "open_document")):
+        raise ValueError(f"action {draft.action!r} is not a single clear supported action label; use the canonical action and negated flag for each atomic activity, preserving qualification/uncertainty and unsupported activities without guessing")
+    if not clear_prefix or suffix not in ACTION_SUFFIXES[action]:
+        # E.g. run_sql_query and open_network_port describe other activities.
+        # A shared verb alone is not permission to force them into coverage.
+        return draft
+    if action == "launch_program" and DOCUMENT_TARGET.search(draft.target or ""):
+        raise ValueError(f"action {draft.action!r} has an ambiguous document/program target; return the activity actually asserted without guessing")
+    negated = bool(negations)
     note = f"The host read the action {draft.action!r} as {action}" + (" with the claim negated" if negated and not draft.negated else "")
     return draft.model_copy(update={"action": action, "negated": draft.negated or negated, "interpretation_notes": [*draft.interpretation_notes, note]})
+
+
+def validate_activity_scope(draft):
+    """Reject known over-splits without treating lexical cues as a semantic proof.
+
+    Cues are used only to reject an absent activity when another supported
+    activity is expressed. Unrecognized phrasing needs semantic evaluation;
+    absence of every cue does not prove the witness asserted no activity.
+    """
+    expressed = {action for action, pattern in ACTION_CUES.items() if pattern.search(draft.sentence)}
+    if draft.action in SUPPORTED_ACTIONS and expressed and draft.action not in expressed:
+        raise ValueError(f"claim {draft.claim_id}: action {draft.action!r} is not expressed in this source sentence; do not infer extra downloading, opening, launching or deletion. Return only the actual asserted activities, preserving their negation and the source sentence")
+    if draft.action != "launch_program" or not draft.target:
+        return
+    sentence = draft.sentence
+    # A separate program predicate (including pronoun references) can assert an
+    # activity independently. Do not discard it merely because an app is also a means.
+    if re.search(r"\b(?:launch(?:ed|ing)?|start(?:ed|ing)?|execut(?:e|ed|ing)|run|ran|running|use|used|(?:am|is|are|was|were|been)\s+using)\b", sentence, re.I):
+        return
+    mentions = list(re.finditer(r"(?<!\w)" + re.escape(draft.target) + r"(?!\w)", sentence, re.I))
+    if not mentions:
+        return
+    for mention in mentions:
+        prefix = sentence[:mention.start()]
+        means = re.search(r"\b(?:using|with|in)\s+(?:the\s+)?$", prefix, re.I)
+        if means is None:
+            return
+        clause = re.split(r"[;!?]|\b(?:and|but|while|then)\b", prefix[:means.start()], flags=re.I)[-1]
+        if not re.search(r"\b(?:download(?:ed|ing)?|open(?:ed|ing)?|delet(?:e|ed|ing)|recycl(?:e|ed|ing)|remov(?:e|ed|ing))\b", clause, re.I):
+            return
+    raise ValueError(f"claim {draft.claim_id}: {draft.target!r} is only the means of another activity in this sentence, not a separately asserted program activity. Omit this extra launch_program claim; retain the actual download/open/delete claim with its own negation. Do not change the source sentence")
 
 
 PLACEHOLDERS = {"", "-", "none", "n/a", "na", "nil", "null", "no", "not applicable", "no uncertainty"}
@@ -105,6 +170,7 @@ def extract_claims(case, client, budget):
                 ids.add(draft.claim_id)
                 draft = draft.model_copy(update={"uncertainty": without_placeholders(draft.uncertainty), "interpretation_notes": without_placeholders(draft.interpretation_notes)})
                 draft = normalize_action(draft)
+                validate_activity_scope(draft)
                 stated = draft.time_expression
                 if stated is not None and (not stated.strip() or stated.casefold() not in case.testimony.casefold()):
                     raise ValueError(f"time_expression {stated!r} is not words from the testimony; copy the witness's own words for the time, or use null when no time was stated")
