@@ -11,7 +11,7 @@ from ..runtime.client import ModelTurn
 from .models import Assessment, VerificationResult
 from .hints import claim_view, consistency_problem, coverage_view, family_can_show, record_can_show, shows_action, tool_search_hint
 from .timecheck import time_agrees, time_conflict
-from .tools import compact_coverage, compact_record, model_view, tool_definitions
+from .tools import compact_record, model_view, tool_definitions
 
 
 class VerdictNudge(CitationError):

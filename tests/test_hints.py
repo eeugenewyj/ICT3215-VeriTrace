@@ -55,12 +55,15 @@ def test_claim_view_drops_the_shared_sentence_and_empty_fields():
     assert "uncertainty" not in view and "resolved_start" not in view
 
 
-def test_coverage_view_lists_unparsed_families_by_name_only():
+def test_coverage_view_distinguishes_source_counts_from_family_markers():
     from veritrace.agents.hints import coverage_view
     view = coverage_view([entry("lnk", item_id="lnk01"), entry("jumplist", "unsupported", 0, reason="Family outside enabled coverage"), entry("prefetch", "unsupported", 0), entry("recyclebin", "failed", 0, error_code="parser_exit")])
-    assert view["not_covered"] == ["jumplist", "prefetch"]
-    assert [r["family"] for r in view["sources"]] == ["lnk", "recyclebin"]
-    assert view["sources"][1]["error"] == "parser_exit"
+    rows = {r["family"]: r for r in view["families"]}
+    assert rows["lnk"] == {"family": "lnk", "items": 1, "records": 1, "statuses": {"parsed": 1}}
+    assert rows["jumplist"]["items"] == 0 and rows["jumplist"]["statuses"] == {"unsupported": 1}
+    assert rows["recyclebin"]["statuses"] == {"failed": 1}
+    assert "parser_exit" not in str(view)
+    assert view["detail_tool"] == "get_source_coverage"
 
 
 def test_pronoun_target_is_replaced_by_the_nearest_named_file_for_the_model():

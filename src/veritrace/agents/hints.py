@@ -6,6 +6,7 @@ shows an action, and which word of the claim names the file, are deterministic: 
 """
 import re
 
+from ..settings import FAMILIES as SOURCE_FAMILIES
 from .timecheck import claimed_seconds, time_agrees
 
 # action -> evidence families that can show it, most direct first
@@ -141,15 +142,27 @@ def claim_view(claim, claims=()):
 
 
 def coverage_view(coverage):
-    """Parsed sources in full, everything else as a bare name list, to save context."""
-    rows, not_covered = [], []
+    """Bound model context by family count, never by the number of input files.
+
+    Status counts include family-level markers (whose item_id is absent); items
+    counts only actual supplied files. Undeclared families share an 'other' row.
+    Full per-item diagnostics remain in coverage.json and extraction receipts.
+    """
+    groups, other_families = {}, set()
     for c in coverage:
-        if c.status in ("unsupported", "unavailable-in-input"):
-            not_covered.append(c.family)
-            continue
-        row = {"family": c.family, "status": c.status, "records": c.record_count}
-        for key, value in (("item_id", c.item_id), ("reason", c.reason), ("error", c.error_code), ("companions", c.companion_handling)):
-            if value:
-                row[key] = value
-        rows.append(row)
-    return {"sources": rows, "not_covered": sorted(set(not_covered))}
+        family = c.family if c.family in SOURCE_FAMILIES else "other"
+        if family == "other":
+            other_families.add(c.family)
+        row = groups.setdefault(family, {"family": family, "items": 0, "records": 0, "statuses": {}})
+        row["items"] += c.item_id is not None
+        row["records"] += c.record_count
+        row["statuses"][c.status] = row["statuses"].get(c.status, 0) + 1
+    rows = []
+    for family in (*SOURCE_FAMILIES, "other"):
+        if family in groups:
+            row = groups[family]
+            row["statuses"] = dict(sorted(row["statuses"].items()))
+            if family == "other":
+                row["family_count"] = len(other_families)
+            rows.append(row)
+    return {"families": rows, "detail_tool": "get_source_coverage"}

@@ -149,7 +149,9 @@ def test_model_sees_second_precision_utc_and_a_compact_coverage_table():
     shown = model_view("get_source_coverage", {"coverage": [
         {"family": "lnk", "status": "parsed", "record_count": 1, "item_id": "lnk01", "companion_handling": [], "reason": None, "error_code": None},
         {"family": "jumplist", "status": "unsupported", "record_count": 0, "item_id": None, "companion_handling": [], "reason": "Family outside enabled coverage", "error_code": None}]})
-    assert shown == {"sources": [{"family": "lnk", "status": "parsed", "records": 1, "item_id": "lnk01"}], "not_covered": ["jumplist"]}
+    assert shown == {"families": [
+        {"family": "lnk", "items": 1, "records": 1, "statuses": {"parsed": 1}},
+        {"family": "jumplist", "items": 0, "records": 0, "statuses": {"unsupported": 1}}], "detail_tool": "get_source_coverage"}
 
 
 def test_every_family_is_shown_in_the_witness_local_time():
