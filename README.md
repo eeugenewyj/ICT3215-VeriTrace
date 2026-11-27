@@ -7,10 +7,14 @@ The investigator reviews the complete report and makes the final decision.
 
 The backend prototype is implemented. The [desktop model benchmark](docs/desktop-benchmark.md)
 passed with local qwen3:8b, including an 8,192-token refresh on 14 November 2026.
-**Five parser families have recorded victim-source comparison passes; Edge needs
-a nonempty sample.** Focused [Jump List integration](docs/jumplist-contribution.md)
-also passed genuine local-model runs. Unit tests, parser comparisons and synthetic
-benchmarks do not establish classification accuracy. See
+**All six parser families have recorded victim-source field comparisons**, including
+a nonempty Edge sample in the standard01 development case. A coverage-context fix
+let its five claims reach assessments at the verified 8,192-token limit; 41 invalid
+or empty Prefetch inputs remain explicit failures. Focused
+[Jump List integration](docs/jumplist-contribution.md) also passed genuine local-model
+runs. Unit tests, parser comparisons and synthetic benchmarks do not establish
+classification accuracy. The observed denial-interpretation failure has been fixed
+and replayed; broader semantic and attribution evaluation remains pending. See
 [implementation status](docs/implementation-status.md) for remaining evaluation work.
 
 ## Start here
@@ -87,7 +91,10 @@ acquired-sample comparison before relying on a different version.
 
 Outputs include `report.html`, claims/assessments/coverage JSON, `run.json`,
 `registration.json`, `tool_calls.jsonl`, `evidence.sqlite` and retained raw
-parser output. Citations must match this case, a record returned for that claim,
+parser output. `coverage-summary.json` and the HTML distinguish parsed files
+from unparsed inputs and explain failures. `veritrace report` can produce a new
+view with source-bound diagnostic notes without rerunning inference; see the
+[manual](docs/manual.md). Citations must match this case, a record returned for that claim,
 an original source identity and an unchanged parser-output location.
 
 Assessments are **supported**, **contradicted**, **unverified** or
