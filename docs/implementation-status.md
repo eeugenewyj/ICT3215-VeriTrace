@@ -2,8 +2,58 @@
 
 Updated 28 November 2026 after controlled development tests and integration of
 upstream commits 737b03e (denials and uncertainty) and 5e8cd16 (clock checks).
+Fresh native pipeline and bounded tool-limit validation are recorded below.
 
-## Current desktop checkpoint: controlled development tests
+## Current desktop checkpoint: fresh native pipeline checks
+
+The latest merged code was exercised through the actual CLI, local qwen3:8b and
+all six configured native parsers on the existing standard01 acquisition. The
+six selected scenarios cover the five-positive baseline, wrong day, wrong clock,
+approximate wrong clock, download denial and compound denial/no-recall wording.
+Each uses a fresh output directory; no external parser-output cache or recorded
+model response is substituted. Ordinary within-run extraction caching remains
+part of the product. The VM is checked stopped before each inference request.
+
+The first six runs produced 12 claims and 11 assessments. All fresh native
+source-derived fields matched the earlier 238-record corpus. The wrong-day
+assessment was inconclusive; exact/approximate wrong clocks and the download
+denial were contradicted. The compound case returned supported, contradicted
+and inconclusive. One baseline opening claim exhausted its twelve-tool-call
+allowance after successful searches and lost its assessment; that failed run is
+retained in `.runs/standard01-development06-native/`.
+
+The bounded fix stops retrieval at the existing cap and requests a schema-only
+assessment from returned evidence, preserving citations, early-stop limitations
+and the two-repair budget. Missing successful searches still produce an error.
+Five new regressions reproduced the original failure; the isolated preview and
+actual project both pass **358 tests, one integration test deselected** after
+the fix. The second six-scenario native/model run completed all **12 assessments**:
+five supported baseline claims, an inconclusive wrong-day claim, contradicted
+exact/approximate wrong-clock claims, a contradicted download denial, and
+supported/contradicted/inconclusive compound-case assessments. No run, claim or
+tool errors occurred. The formerly missing PDF-opening assessment reached the
+same twelve-call cap, then finalized with validated citations and an explicit
+early-stop limitation; the cap was not increased.
+
+All six fresh 238-record corpora matched the reference fields. Original export
+hashes, all six case inputs, actual model-facing interpretations, dates/clock
+precision, citations and offline report links were checked. The largest observed
+provider prompt was 5,322 tokens with the 8,192-token context/768-token response
+cap unchanged; no response was length-limited. Reviewed reports retain 143 parsed
+Prefetch inputs and 41 source-bound explanations. The results and completion
+audit are `.runs/standard01-development07-native/comparison.html` and
+`completion.json`.
+
+One baseline opening explanation overstates browser-download/deletion context
+alongside its LNK/Jump List citations. A source-bound note flags that wording for
+independent relevance/sufficiency and attribution review; the model output is
+unchanged. Citation identity checks do not certify reasoning. Two actual human
+reviews remain pending; the separate worksheets contain 31 blank atomic slots
+across 15 development scenarios on one acquisition. No formal accuracy, held-out
+result or investigation-time improvement is claimed. The exact validated source
+fingerprint and original reports are retained in the private run pack.
+
+## Earlier desktop checkpoint: controlled development tests
 
 The latest merge combines the incoming bounded case-index clock-mismatch check
 with the existing calendar and generic-target guards. Date-only statements do
@@ -12,8 +62,8 @@ leave the time assessment inconclusive. Same-day clock mismatches retain the
 incoming behavior. The merged suite reports **353 passed, one integration test
 deselected**, including three added calendar/clock interaction regressions.
 These checks are recorded under `.runs/merge-20261128-time-checks/`.
-The live model results below predate this latest clock-check merge; no new
-model run or formal accuracy result is claimed for it.
+The cached-output model results in this earlier checkpoint predate the clock-check
+merge; the fresh native results are recorded above. No formal accuracy is claimed.
 
 The original test pack contains 13 scenarios and 27 draft atomic label rows from
 one standard01 acquisition. Four recorded source versions completed 23 live

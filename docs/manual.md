@@ -33,6 +33,14 @@ extract_case call, permits bounded evidence queries and validates every cited
 record against claim-specific retrieval receipts. No arbitrary shell, SQL,
 file-path selection or network-fetch tool is exposed to either agent.
 
+Each claim permits at most twelve retrieval-tool attempts, including invalid
+requests. Once a successful evidence search has run, reaching that cap stops
+retrieval and requests assessment JSON using only returned evidence. A batch
+that would exceed the remaining allowance is not executed. The report discloses
+the early stop; it does not imply a complete search. A successful empty search
+can yield unverified. Without a successful search, exhausting the cap remains an
+operational error. Citation validation and the two-repair limit still apply.
+
 Agent 1 keeps the activity separate from its polarity: a denial of downloading
 uses action=download_file and negated=true. Clear noncanonical action labels
 such as "did not download" are normalized with an interpretation note. The

@@ -130,6 +130,10 @@ def verify_claims(case, claims, client, budget, tools):
                     if final_next:
                         # A correction needs no more retrieval; going straight to the answer saves a request.
                         final_next, turn = False, ModelTurn(content="")
+                    elif searched and count >= 12:
+                        stopped_early = "the twelve-tool-call limit was reached"
+                        progress.host("retrieval stopped at the twelve-tool-call limit; assessing from what was found")
+                        turn = ModelTurn(content="")
                     else:
                         budget.ensure(messages, definitions, None)
                         turn = client.chat(messages, tools=definitions)
@@ -148,10 +152,14 @@ def verify_claims(case, claims, client, budget, tools):
                     stopped_early = "the model repeated a search it had already made"
                     progress.host("the model repeated a search it had already made; no further retrieval, assessing from what was found")
                     turn = ModelTurn(content="")
+                if turn.tool_calls and count + len(turn.tool_calls) > 12:
+                    if not searched:
+                        raise WorkflowError("Twelve tool calls exhausted for this claim")
+                    stopped_early = "the twelve-tool-call limit would be exceeded"
+                    progress.host("the next tool batch would exceed the twelve-tool-call limit; assessing from what was found")
+                    turn = ModelTurn(content="")
                 if turn.tool_calls:
                     made.update(call_key(c) for c in turn.tool_calls)
-                    if count + len(turn.tool_calls) > 12:
-                        raise WorkflowError("Twelve tool calls exhausted for this claim")
                     count += len(turn.tool_calls)
                     messages.extend([turn.as_assistant_message(), *execute_request(turn, tools, claim_id=claim.claim_id)])
                     tools.context_compactions += deduplicate_record_messages(messages)

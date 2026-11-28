@@ -199,3 +199,73 @@ identities and source spans. Report regeneration retained byte-identical run JSO
 and registrations, with 143 parsed Prefetch inputs and 41 diagnostic notes.
 The offline results index and completion receipt are
 `.runs/standard01-development05/comparison.html` and `completion.json`.
+
+## Fresh native CLI checks after the clock-check merge
+
+Commit 49a1509 was tested with the actual CLI entry point, installed native
+parsers and live local inference. Six scenarios cover the baseline, wrong day,
+wrong clock, approximate wrong clock, download denial and compound denial with
+uncertain memory. The approximate-clock scenario adds one new source-equivalent
+development variant, bringing the review packet to 15 scenarios and 31 draft
+atomic slots on the same acquisition. Expectations were recorded before model
+inference; the separate reviewer sheets omit them and model outcomes.
+
+Each run uses a fresh output directory and the unmodified configured adapters.
+Only the Ollama transport is wrapped to retain request/response traces. There is
+no recorded-response or external native-output replay. The six installed parser
+families execute in every run; normal extraction caching within a single run
+remains enabled. The model digest, runtime, template, 8,192-token context and
+768-token response cap remain unchanged, and the VM is checked stopped before
+each inference request. RAM and the preserved disk chain are not analysed.
+
+The first version completed six runs with 12 claims and 11 assessments. Every
+fresh 238-record corpus matched the reference source identities, locators,
+targets, applications, accounts/SIDs and typed timestamp fields. Native-output
+filesystem paths are excluded from that comparison. This is not a new
+independent parser certification or formal accuracy measurement.
+
+One baseline opening claim reached the twelve-tool-call cap after retrieving
+relevant records, then failed with a workflow error and no assessment. The other
+baseline claims completed. The wrong-day result was inconclusive; exact and
+approximate wrong-clock cases and the download denial were contradicted. The
+compound case returned supported, contradicted and inconclusive. The baseline
+failure remains unchanged under `.runs/standard01-development06-native/`.
+
+Five regression checks reproduced the cap failure. The fix finalizes from
+returned evidence after a successful search when the cap is reached or a new
+batch would exceed it. No extra retrieval is executed, and the assessment
+discloses incomplete retrieval. Empty successful searches can finalize
+unverified; no successful search still yields a workflow error. Invalid
+citations still require repair, with the existing two-repair ceiling enforced.
+The isolated preview and actual checkout both passed **358 tests, one integration
+test deselected**. The fixed-source native rerun is recorded separately in
+`.runs/standard01-development07-native/`; original inputs and expectations are
+unchanged. These observations are development checks pending independent human
+review, not accuracy or investigation-time improvement results.
+
+The fixed-source rerun completed all six scenarios and all 12 assessments,
+without run, claim or tool errors. The baseline returned five supported
+assessments. The PDF-opening claim again executed twelve retrieval calls; this
+time it finalized with five mechanically validated citations and a recorded
+early-stop limitation. The live branch was exercised without increasing the
+cap. Wrong day returned inconclusive; exact/approximate wrong clocks and the
+download denial returned contradicted. The compound case returned supported,
+contradicted and inconclusive. All provisional status expectations were met;
+they remain unreviewed development expectations.
+
+All six fresh native corpora matched the same 238 reference source-derived
+records. The final audit checked all 245 original export hashes, all six input
+hash maps, exact spans, actual model-facing claims, date/clock precision,
+citations and HTML links. Provider counts stayed within the validated context
+headroom: the maximum observed prompt was 5,322 tokens, with no length-limited
+responses at the existing 768-token cap. New report views retain byte-identical
+run JSON/registrations, 143 parsed Prefetch inputs and 41 diagnostic explanations.
+The result index is `.runs/standard01-development07-native/comparison.html`.
+
+An interpretation review note flags the baseline opening explanation's use of
+browser-download and later-deletion context as support for opening. LNK/Jump List
+citations are also present, and the model's limitations qualify the other traces.
+The source-bound note and unchanged model output are available for independent
+relevance/sufficiency and attribution review. Valid citation identities and
+provisional outcome agreement do not certify that prose. Both human reviewer
+sheets remain blank; no formal classification score has been generated.
