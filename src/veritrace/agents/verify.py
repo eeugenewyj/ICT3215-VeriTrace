@@ -9,7 +9,7 @@ from .citations import validate_citations
 from .context import deduplicate_record_messages
 from ..runtime.client import ModelTurn
 from .models import Assessment, VerificationResult
-from .hints import claim_view, consistency_problem, coverage_view, family_can_show, record_can_show, shows_action, tool_search_hint
+from .hints import claim_view, consistency_problem, coverage_view, family_can_show, record_can_show, shows_action, time_contradiction, tool_search_hint
 from .timecheck import time_agrees, time_conflict
 from .tools import compact_record, model_view, tool_definitions
 
@@ -222,8 +222,13 @@ def verify_claims(case, claims, client, budget, tools):
                         cited = [tools.index.get(case.manifest.case_id, rid) for rid in assessment.cited_record_ids]
                         problem = time_conflict(claim, cited, case.manifest.source_timezone)
                         if problem:
-                            progress.host(f"time check - {progress.short(problem, 220)}; 'supported' withheld")
-                            assessment = assessment.model_copy(update={"status": "inconclusive", "justification": f"{assessment.justification} Host time check: {problem}, so 'supported' was withheld.", "limitations": [*assessment.limitations, "Status changed from supported to inconclusive by the host time check"]})
+                            contradiction = time_contradiction(claim, claims, cited, tools.index, case.manifest.case_id, case.manifest.source_timezone)
+                            if contradiction:
+                                progress.host(f"time check - {progress.short(contradiction, 220)}; 'supported' changed to 'contradicted'")
+                                assessment = assessment.model_copy(update={"status": "contradicted", "justification": f"Host time check: {contradiction}, so 'supported' was changed to 'contradicted'. The model's own reasoning, written before this check and unreliable on clock times, follows: {assessment.justification}", "limitations": [*assessment.limitations, "Status changed from supported to contradicted by the host time check: the records show this action only at other times; sources not supplied (for example a database -wal file) were not searched"]})
+                            else:
+                                progress.host(f"time check - {progress.short(problem, 220)}; 'supported' withheld")
+                                assessment = assessment.model_copy(update={"status": "inconclusive", "justification": f"{assessment.justification} Host time check: {problem}, so 'supported' was withheld.", "limitations": [*assessment.limitations, "Status changed from supported to inconclusive by the host time check"]})
                     if assessment.status == "contradicted" and not claim.negated:
                         cited = [tools.index.get(case.manifest.case_id, rid) for rid in assessment.cited_record_ids]
                         if time_agrees(claim, cited, case.manifest.source_timezone):

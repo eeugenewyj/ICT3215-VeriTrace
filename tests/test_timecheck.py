@@ -61,11 +61,13 @@ def run_supported(tmp_path, expression, stamp):
     return run_status(tmp_path, expression, stamp)
 
 
-def test_supported_with_a_mismatching_clock_time_is_withheld(tmp_path):
-    """Regression: qwen3:8b called a 5:10 pm claim 'supported' against a 16:25 download."""
+def test_supported_with_a_mismatching_clock_time_is_not_kept(tmp_path):
+    """Regression: qwen3:8b called a 5:10 pm claim 'supported' against a 16:25 download. The only record for this
+    action is at another time, so the host now answers contradicted (see tests/test_time_contradiction.py for when it
+    stays inconclusive)."""
     result = run_supported(tmp_path, "5:10 pm", "2026-10-16T08:25:19")
     (assessment,) = result.assessments
-    assert assessment.status == "inconclusive"
+    assert assessment.status == "contradicted"
     assert "Host time check" in assessment.justification and "16:25:19" in assessment.justification
     assert any("host time check" in limit for limit in assessment.limitations)
     assert assessment.cited_record_ids == [make_record().record_id]
@@ -171,6 +173,6 @@ def test_approximate_time_never_lets_the_host_decide_a_contradiction():
 
 def test_supported_with_an_approximate_time_far_from_the_record_is_withheld(tmp_path):
     (assessment,) = run_supported(tmp_path / "far", "about 10:00 am", "2026-10-16T08:25:19").assessments
-    assert assessment.status == "inconclusive" and "Host time check" in assessment.justification
+    assert assessment.status == "contradicted" and "Host time check" in assessment.justification
     (kept,) = run_supported(tmp_path / "near", "about 4:30 pm", "2026-10-16T08:25:19").assessments
     assert kept.status == "supported"
