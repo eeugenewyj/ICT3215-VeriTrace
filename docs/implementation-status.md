@@ -1,8 +1,78 @@
 # Implementation and validation status
 
-Updated 28 November 2026 after the standard01 coverage and Agent 1 denial fixes.
+Updated 28 November 2026 after controlled development tests and integration of
+upstream commit 737b03e (denials and witness uncertainty).
 
-## Current desktop checkpoint: standard01
+## Current desktop checkpoint: controlled development tests
+
+The original test pack contains 13 scenarios and 27 draft atomic label rows from
+one standard01 acquisition. Four recorded source versions completed 23 live
+local-model workflow runs, including retained failures. Three original baseline
+repetitions agreed on all five claim interpretations, verdicts and citation
+sets; agreement is not accuracy. A later five-positive baseline also completed.
+
+Testing exposed cropped source fragments, ten-claim response truncation,
+calendar-date mismatches and generic targets inheriting previous filenames.
+The fixes enforce complete source sentences at clear boundaries, batch longer
+testimony within the existing response limit, compare explicit dates in the
+source timezone, and reserve filename inheritance for explicit pronouns.
+Prior context contains entity/time references rather than full assertions.
+The final pre-merge ten-claim run completed five supported, three contradicted
+and two unverified assessments without run, claim or tool errors. The generic
+document stayed generic in the actual model-facing claim and search hint.
+
+All 245 original export hashes, all 13 prepared inputs and the reference native
+output cache were rechecked unchanged. Matching inputs reuse hash-verified
+native outputs while changed inputs enter their configured adapter; these are
+genuine local-model/dispatcher checks, not fresh six-parser validation or parser
+latency measurements. Earlier extraction errors, a context-echo failure, the
+known intermediate generic-target projection defect and an interrupted attempt
+remain available. The interrupted attempt has no fabricated verdict.
+
+The pre-merge suite passed 318 tests with one integration test deselected. The
+last filename-boundary guard was checked against all six actual recorded Agent 1
+turns: requests, schemas and all ten claims were identical under deterministic
+replay. Live and final pre-merge source fingerprints are retained separately.
+Reviewed report views show 143 parsed Prefetch inputs and explain all 41
+unparsed inputs while retaining original outcomes and byte-identical run JSON.
+The comparison and audit are `.runs/standard01-development04/comparison.html`
+and `completion.json`. See [development test details](standard01-development-tests.md).
+
+Upstream 737b03e adds compound-denial completeness checks, explicit no-recall
+uncertainty handling and assessment guidance for relevant but limited records.
+It was fast-forwarded into this checkout and combined with the local fixes;
+the merged suite passes **340 tests, one integration deselected**, including
+later-batch denial repair and uncertainty isolation. The recovery stash and
+merge receipts are recorded under `.runs/merge-20261128-agent-fixes/`.
+Post-merge live regressions are recorded separately in
+`.runs/standard01-development05/`; earlier observations are not relabelled as
+results of the merged prompts.
+
+Both post-merge runs completed. The ten-claim case returned five supported,
+three contradicted and two unverified assessments. One mistyped case ID in a
+get_record request was rejected, then corrected successfully on the next call;
+both receipts remain recorded. The new compound-denial/no-recall case returned
+supported, contradicted and inconclusive. Its first extraction omitted the
+opening denial; the completeness guard rejected it and the repair retained all
+three claims. Neither run has run or claim errors. Actual model-facing generic
+targets and no-recall uncertainty were checked, along with spans and citations.
+
+Across versions there are now **25 completed workflow runs, 14 development
+scenarios and 30 draft atomic rows**, all from one acquisition. All original
+exports, all 14 prepared inputs and the reference native cache remain unchanged.
+The latest index is `.runs/standard01-development05/comparison.html`; its reviewed
+reports retain the 143 parsed Prefetch inputs and all 41 diagnostic explanations.
+Separate 30-row reviewer A/B sheets are in that version's `independent-review/`
+directory. Only two scenarios were rerun under the merged prompts.
+
+No independent human label reviews or formal classification scores have been
+completed. The separate reviewer A/B sheets include case-specific source
+availability and timezone metadata. These descriptive development scenarios
+are not independent acquisitions or blind held-out cases. Formal evaluation
+still requires independent adjudication, additional acquired cases and a
+frozen configuration. RAM remains preserved for later analysis.
+
+## Earlier desktop checkpoint: standard01 acquisition and coverage
 
 The frozen development case contains 245 owner-exported files from the stopped
 Windows 10 Pro victim. Independent source-field comparisons matched 238 decoded
@@ -402,8 +472,9 @@ Implementation rulings carried forward:
 4. Inspected UserAssist plugin output does not include binary value bytes;
    retain encoded names and exact hive locators, with bytes preserved in the hive.
 5. Six mappings were derived from pinned official source and controlled export
-   fixtures. Five now have acquired-source comparison passes and pinned
-   configured extraction; Edge's nonempty-source gate remains closed.
+   fixtures. The October checkpoint passed five acquired-source comparisons;
+   standard01 subsequently passed source-field comparisons across all six,
+   including nonempty Edge visits/downloads, with pinned configured extraction.
 6. Windows staging/copy tooling and an ignored execution ledger replace shell
    helpers incompatible with this environment; the ledger is retained because
    the full implementation plan still has owner-run acceptance work outstanding.
@@ -412,14 +483,15 @@ Implementation rulings carried forward:
 
 | Work | Required evidence |
 | --- | --- |
-| Victim acquisition rehearsal | RAM capture/transfer, stopped-VM preservation, FTK filesystem access and six families' source files received/hashed. Confirm source-folder completeness and historical snapshot/security metadata; a nonempty Edge sample is still needed. |
-| Parser deployment | Five acquired-source comparisons, pinned profiles and configured extraction passed. Obtain and independently compare a nonempty Edge visit/download sample, then enable its pinned profile. |
-| Genuine end-to-end run | Focused Jump List-only cases and opt-in acquired integration passed on 14 November. Broader six-family cases, classification/sufficiency review and repeatability evaluation remain pending. |
-| Evaluation | Reviewed development/held-out corpus, frozen configuration, source-removal variants, independent relevance/sufficiency ratings, repeatability and manual baseline. |
+| Acquisition | standard01 RAM capture/transfer and stopped-VM disk preservation are verified; six-family exports are received/hashed. Retain source limitations and confirm historical snapshot/security metadata where still unknown. New independent acquisitions remain necessary for the target corpus. |
+| Parser deployment | All six standard01 source-field comparisons passed (238 records). Validate new parser versions/source types before enabling them; the 41 diagnosed Prefetch input limitations remain explicit. |
+| Genuine end-to-end run | Six-family development runs and controlled variants completed with live local inference. Complete independent claim/citation relevance, sufficiency and attribution review; repeat the frozen final configuration for formal repeatability. |
+| Evaluation | Two actual independent reviewers, additional development/held-out acquisitions, opaque held-out identifiers, frozen configuration and manual baseline. Source-removal/corruption development checks and initial repeated-run agreement are recorded, without accuracy claims. |
 | Submission | Measured-results IEEE report, AI-use statement, final package/manual and subtitled demonstration video. |
 
-No classification accuracy, investigation-time improvement
-or six-family victim-validation result has been measured yet. GPU acceleration
+No formal classification accuracy, investigation-time improvement
+or held-out forensic quality has been measured yet. Six-family source-field
+comparisons and bounded development observations are recorded above. GPU acceleration
 was observed for the pinned desktop benchmark. Direct disk-image
 ingestion and memory interpretation are future milestones; current input is an
 acquired artefact folder.

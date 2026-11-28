@@ -48,6 +48,21 @@ an added action type with no matching activity words also requires repair;
 unrecognized wording is not automatically rewritten. These checks are not a general language/negation
 validator; semantic completeness, scope and attribution still require evaluation.
 
+Claims must copy complete source sentences at clear boundaries; a cropped phrase
+such as "using Edge" cannot become a separate launch statement. More than five
+clearly separated sentences are interpreted in groups of three, with exact
+global spans and unique host IDs. Only recent entity/time references are passed
+between batches; full prior claims stay in the report/audit. The entire
+extraction has at most two repairs and 16 batches. Complex single sentences can
+still exceed the 768-token response cap and fail explicitly. The verified model
+context remains unchanged.
+
+The host time check compares unambiguous full calendar dates as well as clocks
+in source_timezone. Differently dated records cannot establish the stated
+occurrence merely because clock times match. Clock tolerance still applies
+across midnight. Ambiguous/range/relative date scope still needs interpretation;
+a mismatch with one recorded event does not prove no other event occurred.
+
 The model receives a computed coverage summary grouped by the six supported
 families, with unknown/undeclared families grouped as other. Each row reports
 supplied item and record counts plus counts of parsed, valid empty, failed,
@@ -115,6 +130,14 @@ insufficient evidence in available supported sources, or outside coverage.
 Inconclusive requires relevant evidence whose ambiguity/conflict prevents a
 conclusion. Absence alone is never contradiction. Mechanical ID/source checks
 do not establish evidential relevance or identify the person using an account.
+
+Explicit no-recall statements such as "I do not remember deleting it" retain
+uncertainty rather than becoming flat denials. A record of the activity cannot
+establish whether the witness remembers it; the host withholds supported or
+contradicted verdicts for that marked uncertainty. Narrow checks also request
+repair when a represented sentence's explicit denial has no corresponding
+negated claim. These checks do not prove completeness for every sentence or
+resolve arbitrary negation, target scope or uncertainty wording.
 
 Exit codes: 0 complete, 2 invalid input/configuration, 3 model/dependency/workflow
 error, 4 partial run. Error/partial reports retain valid available results and

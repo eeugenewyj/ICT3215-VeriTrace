@@ -7,7 +7,7 @@ shows an action, and which word of the claim names the file, are deterministic: 
 import re
 
 from ..settings import FAMILIES as SOURCE_FAMILIES
-from .timecheck import claimed_seconds, time_agrees
+from .timecheck import claimed_seconds, time_agrees, time_conflict
 
 # action -> evidence families that can show it, most direct first
 FAMILIES = {
@@ -21,7 +21,8 @@ FAMILIES = {
 GENERIC = {"a", "an", "the", "it", "its", "this", "that", "these", "those", "them", "they", "one", "ones",
            "file", "files", "image", "images", "picture", "pictures", "photo", "photos", "document",
            "documents", "item", "items", "thing", "things", "my", "our", "your", "of", "on", "in", "to",
-           "program", "programs", "application", "applications", "app", "apps", "software", "tool", "executable"}
+           "program", "programs", "application", "applications", "app", "apps", "software", "tool", "executable", "something", "anything"}
+PRONOUN_TARGETS = {"it", "its", "this", "that", "these", "those", "them", "they"}
 
 
 def target_word(target):
@@ -67,6 +68,8 @@ def shows_action(claim, record, claims, source_timezone):
         return False
     if claimed_seconds(claim.time_expression) is not None and not time_agrees(claim, [record], source_timezone):
         return False
+    if time_conflict(claim, [record], source_timezone):
+        return False
     return True
 
 
@@ -85,11 +88,12 @@ def parsed_families(coverage):
 
 
 def search_hint(claim, claims, coverage=None):
-    """Suggested first search for this claim. A pronoun target borrows the first named file in the case.
-    With coverage, only families that actually produced records are suggested."""
+    """Suggested first search; explicit pronouns use the same nearest reference as claim_view.
+    Generic/unknown targets do not inherit a filename. With coverage, only families
+    that actually produced records are suggested."""
     word = target_word(claim.target)
-    if word is None:
-        word = next((w for w in (target_word(c.target) for c in claims) if w), None)
+    if word is None and (claim.target or "").strip().casefold() in PRONOUN_TARGETS:
+        word = target_word(resolved_target(claim, claims))
     families = FAMILIES.get(claim.action, [])
     if coverage is not None:
         have = parsed_families(coverage)
@@ -122,6 +126,8 @@ def tool_search_hint(case_id, claim, claims, coverage=None):
 def resolved_target(claim, claims):
     """The claim's own target, or for a pronoun ('it') the nearest earlier claim's named target, else a later one."""
     if target_word(claim.target):
+        return claim.target
+    if (claim.target or "").strip().casefold() not in PRONOUN_TARGETS:
         return claim.target
     ordered = list(claims)
     index = next((i for i, c in enumerate(ordered) if c.claim_id == claim.claim_id), len(ordered))

@@ -5,6 +5,7 @@ noted the discrepancy and still answered "supported". Comparing clock times is a
 plain code does it instead of the model, and a mismatch withholds "supported".
 """
 import re
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 TIME_TOLERANCE_S = 120
@@ -17,6 +18,38 @@ APPROX = re.compile(r"\b(?:around|about|approx\w*|roughly|or so)\b|~|\w-?ish\b",
 RANGE_WORDS = re.compile(r"\b(?:sometime|between|before|after|early|late|maybe)\b", re.I)
 CLOCK12 = re.compile(r"\b(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*([ap])\.?m(?![a-z])", re.I)
 CLOCK24 = re.compile(r"\b([01]?\d|2[0-3]):([0-5]\d)\b")
+MONTHS = {name: number for number,name in enumerate(("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"),1)}
+MONTH_NAME = r"(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec)"
+DAY_FIRST = re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({MONTH_NAME})\s+(\d{{4}})\b",re.I)
+MONTH_FIRST = re.compile(rf"\b({MONTH_NAME})\s+(\d{{1,2}})(?:st|nd|rd|th)?[,]?\s+(\d{{4}})\b",re.I)
+ISO_DATE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})(?=T|\b)")
+
+
+def stated_date(expression):
+    """One unambiguous full date from the witness's own words, never model bounds.
+
+    Numeric day/month ambiguity, relative days and multiple-date scope remain
+    unresolved here. This check does not implement general date interpretation.
+    """
+    dates = set()
+    def uncertain(match):
+        # Do not turn 'around 15 October' or 'between 15 and 16 October'
+        # into an exact date. A qualifier after the date can instead concern
+        # its clock time ('on 15 October at about 3 pm').
+        return bool(VAGUE.search((expression or "")[:match.start()]))
+    try:
+        for match in DAY_FIRST.finditer(expression or ""):
+            if uncertain(match): return None
+            dates.add(date(int(match[3]),MONTHS[match[2][:3].lower()],int(match[1])))
+        for match in MONTH_FIRST.finditer(expression or ""):
+            if uncertain(match): return None
+            dates.add(date(int(match[3]),MONTHS[match[1][:3].lower()],int(match[2])))
+        for match in ISO_DATE.finditer(expression or ""):
+            if uncertain(match): return None
+            dates.add(date(int(match[1]),int(match[2]),int(match[3])))
+    except ValueError:
+        return None
+    return next(iter(dates)) if len(dates)==1 else None
 
 
 def _clock(expression):
@@ -52,7 +85,8 @@ def _compare(claim, records, source_timezone, tolerance, *, approximate=False):
     wanted = claimed_seconds(claim.time_expression)
     if wanted is None and approximate:
         wanted, tolerance = approximate_seconds(claim.time_expression), APPROX_TOLERANCE_S
-    if wanted is None or not source_timezone:  # without the witness's timezone a clock time cannot be compared
+    day = stated_date(claim.time_expression)
+    if (wanted is None and day is None) or not source_timezone:
         return None
     zone = ZoneInfo(source_timezone)
     local = []
@@ -66,9 +100,17 @@ def _compare(claim, records, source_timezone, tolerance, *, approximate=False):
     if not local:
         return None
     for stamp in local:
+        if day is not None and wanted is None:
+            if stamp.date() == day:
+                return True, local
+            continue
         seconds = stamp.hour * 3600 + stamp.minute * 60 + stamp.second
         for target in wanted:
-            gap = (seconds - target + 43200) % 86400 - 43200
+            if day is not None:
+                at = datetime.combine(day,time(),tzinfo=zone)+timedelta(seconds=target)
+                gap = stamp.timestamp()-at.timestamp()
+            else:
+                gap = (seconds - target + 43200) % 86400 - 43200
             if -tolerance <= gap <= 60 + tolerance:  # the stated minute, plus tolerance either side
                 return True, local
     return False, local
@@ -79,11 +121,15 @@ def time_conflict(claim, records, source_timezone, tolerance=TIME_TOLERANCE_S):
     result = _compare(claim, records, source_timezone, tolerance, approximate=True)
     if result is None or result[0]:
         return None
-    shown = ", ".join(sorted({s.strftime("%H:%M:%S") for s in result[1]}))
+    shown = ", ".join(sorted({s.strftime("%Y-%m-%d %H:%M:%S" if stated_date(claim.time_expression) else "%H:%M:%S") for s in result[1]}))
+    if stated_date(claim.time_expression) is not None and claimed_seconds(claim.time_expression) is None and approximate_seconds(claim.time_expression) is None:
+        return f"the witness stated {claim.time_expression!r}, but the cited record dates/times in {source_timezone} are {shown}; none is on the stated calendar date"
     return f"the witness stated {claim.time_expression!r}, but the cited record times in {source_timezone} are {shown}; none is within {(APPROX_TOLERANCE_S if claimed_seconds(claim.time_expression) is None else tolerance) // 60} minutes"
 
 
 def time_agrees(claim, records, source_timezone, tolerance=TIME_TOLERANCE_S):
     """True only when the claim has an exact clock time and a cited record time matches it."""
+    if claimed_seconds(claim.time_expression) is None:
+        return False
     result = _compare(claim, records, source_timezone, tolerance)
     return bool(result and result[0])

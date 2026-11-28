@@ -228,8 +228,59 @@ def load_prompt(name):
     return files("veritrace").joinpath("prompts", name + ".txt").read_text(encoding="utf-8")
 
 
+def validate_source_sentence(testimony, start, end):
+    """Refuse cropped clauses that hide the surrounding assertion or its qualifiers."""
+    raw = testimony[start:end]
+    logical_start = start + len(raw) - len(raw.lstrip())
+    if logical_start and not testimony[logical_start - 1].isspace():
+        raise ValueError("Copy the complete source sentence; a period inside a filename is not a sentence boundary")
+    before = testimony[:start].rstrip(" \t")
+    sentence = testimony[start:end].rstrip()
+    after = testimony[end:].lstrip(" \t")
+    if before and before[-1] not in ".!?\r\n":
+        raise ValueError("Copy the complete source sentence, including its date/qualifiers; a clause fragment is not a separate sentence")
+    if after and not (sentence.endswith((".", "!", "?")) or after.startswith(("\r", "\n"))):
+        raise ValueError("Copy the complete source sentence including its punctuation")
+    if sentence.endswith((".", "!", "?")) and end < len(testimony) and not testimony[end].isspace():
+        raise ValueError("Copy the complete source sentence; a period inside a filename is not a sentence boundary")
+
+
+def source_batches(testimony):
+    """Keep short inputs unchanged; split long, clearly separated sentences into threes.
+
+    This bounds ordinary multi-sentence output at the existing 768-token cap.
+    Complex single sentences can still exhaust that cap and fail explicitly.
+    """
+    starts = [0, *[m.end() for m in re.finditer(r"(?<=[.!?])\s+(?=[A-Z])|(?:\r?\n){2,}", testimony) if m.end() < len(testimony)]]
+    if len(starts) <= 5:
+        return [(0, len(testimony))]
+    if len(starts) > 48:
+        raise ModelError("Testimony exceeds the 16-batch claim extraction limit; split it into smaller case inputs")
+    return [(starts[i], starts[i+3] if i+3 < len(starts) else len(testimony)) for i in range(0,len(starts),3)]
+
+
 def extract_claims(case, client, budget):
-    data = {"testimony": case.testimony, "reference_time": case.manifest.testimony_reference_time.isoformat() if case.manifest.testimony_reference_time else None, "source_timezone": case.manifest.source_timezone}
+    ranges = source_batches(case.testimony)
+    repairs, claims = {"used": 0}, []
+    for number, (start,end) in enumerate(ranges,1):
+        # Full prior sentences were repeatedly extracted again by qwen3:8b,
+        # even after validation feedback. Supply referents rather than assertions.
+        context = [{"target": c.target, "actor": c.actor, "time_expression": c.time_expression} for c in claims[-3:]]
+        batch = extract_batch(case, client, budget, start, end, context, repairs)
+        if len(ranges) > 1:
+            for claim in batch:
+                note = f"Host extracted this sentence in batch {number} of {len(ranges)} (batch claim ID {claim.claim_id}); preceding interpreted testimony was provided only as reference context"
+                claims.append(claim.model_copy(update={"claim_id": f"claim{len(claims)+1:04d}", "interpretation_notes": [*claim.interpretation_notes,note]}))
+        else:
+            claims.extend(batch)
+    return claims
+
+
+def extract_batch(case, client, budget, source_start, source_end, context, repairs):
+    testimony = case.testimony[source_start:source_end]
+    data = {"testimony": testimony, "reference_time": case.manifest.testimony_reference_time.isoformat() if case.manifest.testimony_reference_time else None, "source_timezone": case.manifest.source_timezone}
+    if context:
+        data["preceding_context"] = context
     messages = [{"role": "system", "content": load_prompt("claims")}, {"role": "user", "content": json.dumps(data, ensure_ascii=False, separators=(",", ":"))}]
     schema = compact_schema(DraftBatch.model_json_schema())
     for attempt in range(3):
@@ -239,7 +290,7 @@ def extract_claims(case, client, budget):
             if turn.tool_calls:
                 raise ValueError("Claim interpretation has no tools")
             drafts = DraftBatch.model_validate_json(turn.content).claims
-            if not drafts and case.testimony.strip():
+            if not drafts and testimony.strip():
                 raise ValueError("No claims extracted from nonempty testimony")
             ids, interpretations, claims, normalized = set(), set(), [], []
             for draft in drafts:
@@ -256,7 +307,10 @@ def extract_claims(case, client, budget):
                     raise ValueError(f"time_expression {stated!r} is not words from the testimony; copy the witness's own words for the time, or use null when no time was stated")
                 occurrence = draft.occurrence
                 while True:
-                    claim = draft.to_claim(*locate(case.testimony, draft.sentence, occurrence))
+                    start, end = locate(testimony, draft.sentence, occurrence)
+                    start, end = start + source_start, end + source_start
+                    validate_source_sentence(case.testimony, start, end)
+                    claim = draft.to_claim(start, end)
                     identity = (claim.start, claim.end, claim.action, claim.target, claim.negated)
                     if identity not in interpretations:
                         break
@@ -265,7 +319,7 @@ def extract_claims(case, client, budget):
                     # messages here, so the host decides instead of asking again.
                     occurrence += 1
                     try:
-                        locate(case.testimony, draft.sentence, occurrence)
+                        locate(testimony, draft.sentence, occurrence)
                     except ValueError:
                         raise ValueError("Duplicate interpretation of the same source occurrence") from None
                 interpretations.add(identity)
@@ -279,6 +333,7 @@ def extract_claims(case, client, budget):
             require_denials_covered(normalized)
             return claims
         except (ValueError, ValidationError) as exc:
-            if attempt == 2:
+            if repairs["used"] == 2:
                 raise ModelError(f"Claim extraction failed after two repairs: {exc}") from exc
+            repairs["used"] += 1
             messages.extend([turn.as_assistant_message(), {"role": "user", "content": f"Validation error: {exc}. Return a corrected complete JSON claim batch. Keep the source unchanged."}])

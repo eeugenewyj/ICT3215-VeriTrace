@@ -16,6 +16,9 @@ runs. Unit tests, parser comparisons and synthetic benchmarks do not establish
 classification accuracy. The observed denial-interpretation failure has been fixed
 and replayed; broader semantic and attribution evaluation remains pending. See
 [implementation status](docs/implementation-status.md) for remaining evaluation work.
+The [standard01 development fault checks](docs/standard01-development-tests.md)
+record source-removal, corruption, claim-scope, date, uncertainty and response-capacity tests;
+their draft expectations still require independent review.
 
 ## Start here
 
