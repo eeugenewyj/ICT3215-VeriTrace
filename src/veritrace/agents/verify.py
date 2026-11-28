@@ -4,7 +4,7 @@ from pydantic import ValidationError
 
 from .. import progress
 from ..errors import CitationError, ContextOverflowError, IntegrityError, ModelError, VeriTraceError, WorkflowError
-from .claims import SUPPORTED_ACTIONS, compact_schema, load_prompt
+from .claims import NO_RECALL, SUPPORTED_ACTIONS, compact_schema, load_prompt
 from .citations import validate_citations
 from .context import deduplicate_record_messages
 from ..runtime.client import ModelTurn
@@ -229,6 +229,9 @@ def verify_claims(case, claims, client, budget, tools):
                         if time_agrees(claim, cited, case.manifest.source_timezone):
                             progress.host("a cited record's time matches the stated time, so 'contradicted' was withheld")
                             assessment = assessment.model_copy(update={"status": "inconclusive", "justification": f"{assessment.justification} Host check: a cited record's time matches the witness's stated time, so 'contradicted' was withheld.", "limitations": [*assessment.limitations, "Status changed from contradicted to inconclusive by the host time check"]})
+                    if NO_RECALL in claim.uncertainty and assessment.status in ("supported", "contradicted"):
+                        progress.host("the witness only said they do not remember or are not sure, so the records cannot support or contradict it; withheld")
+                        assessment = withheld(assessment, "the witness only said they do not remember or are not sure, so a record of the activity neither supports nor contradicts the statement")
                     if first_status and assessment.status != first_status and not any(l.startswith("Status changed") for l in assessment.limitations):
                         assessment = assessment.model_copy(update={"limitations": [*assessment.limitations, f"Revised after a host check: the model's first answer was '{first_status}', which did not fit the records it cited"]})
                     if stopped_early:

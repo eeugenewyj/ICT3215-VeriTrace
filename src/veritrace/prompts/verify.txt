@@ -29,6 +29,10 @@ contradicted: positive evidence conflicts with the interpreted claim. Absence
 alone never contradicts.
 unverified: no sufficient relevant evidence was located, or the action is
 outside coverage.
+A returned record from a family that can show the action, on the claim's
+target, is relevant evidence even when it carries limits (for example a
+recent-file trace that does not prove reading). With one, never answer
+unverified: answer supported with the limits stated, or inconclusive.
 inconclusive: relevant evidence exists but ambiguity, conflict, time uncertainty
 or essential attribution limits prevent a defensible assessment. Use this for
 relevant-but-ambiguous evidence, not unverified merely for lack of certainty.

@@ -352,8 +352,10 @@ def test_program_assertions_with_independent_scope_are_not_removed(tmp_path, tex
     from veritrace.agents.claims import extract_claims
     case = registered(tmp_path, text)
     program = make_claim(text, action="launch_program", target="Edge", negated="never" in text)
-    claims = extract_claims(case, ReplayClient.from_contents([batch(draft_payload(program))]), TestBudget())
-    assert claims == [program]
+    # A sentence that denies the download needs its own negated claim, which the real model returns alongside the launch.
+    denied = [make_claim(text, claim_id="claim02", action="download_file", target="report.pdf", negated=True)] if "did not download" in text else []
+    claims = extract_claims(case, ReplayClient.from_contents([batch(*(draft_payload(c) for c in [program, *denied]))]), TestBudget())
+    assert program in claims and len(claims) == 1 + len(denied)
 
 
 @pytest.mark.parametrize("extra_action", ["open_document", "recycle_file"])

@@ -129,6 +129,84 @@ def validate_activity_scope(draft):
             return
     raise ValueError(f"claim {draft.claim_id}: {draft.target!r} is only the means of another activity in this sentence, not a separately asserted program activity. Omit this extra launch_program claim; retain the actual download/open/delete claim with its own negation. Do not change the source sentence")
 
+# --- Denials and hedges, read from the witness's own sentence --------------------------------------------------------
+# The model alone decides `negated`; normalize_action only reads negation hidden in an action label. Two failures seen on
+# the real model (qwen3:8b, "I downloaded X but I didn't open it." and "I don't remember deleting X."): the second
+# activity was silently dropped, and a hedge was recorded as a flat denial. Both are checked here against the sentence.
+NO_RECALL = "witness does not remember or is not sure"
+NEG_TOKEN = re.compile(r"^(?:never|not|cannot|can't|cant|won't|wont|(?:did|does|do|have|has|had|was|were|is|would|could|should)n'?t)$")
+OTHER_NEGATION = {"no", "none", "nothing", "nobody", "neither", "nor", "without", "deny", "denied", "denies", "refuse", "refused",
+                  "avoid", "avoided", "refrained", "skipped", "declined"}
+FILLERS = {"even", "really", "ever", "once", "actually", "also", "yet", "been", "have", "has", "had", "just", "definitely", "personally", "to"}
+HEDGE_WORDS = {"remember", "recall", "recollect", "know", "sure", "certain"}  # "do not think I..." stays a soft denial, as the team decided
+SPEECH_WORDS = {"say", "said", "claim", "claimed", "deny", "denied", "admit", "admitted", "state", "stated"}
+VERB_FORMS = {**{v: "open" for v in ("open", "opened", "opening", "opens")},
+              **{v: "download_file" for v in ("download", "downloaded", "downloading")},
+              **{v: "recycle_file" for v in ("delete", "deleted", "deleting", "remove", "removed", "removing", "trash", "trashed", "trashing", "recycle", "recycled", "recycling")},
+              **{v: "launch_program" for v in ("use", "used", "using", "run", "ran", "running", "launch", "launched", "launching", "start", "started", "starting", "execute", "executed", "executing")}}
+
+
+def analyse_sentence(sentence):
+    """What a sentence denies, what it only hedges about, and whether it is too convoluted to judge by rule.
+
+    Only the verb right after a negation counts ("did not download", "never opened"). A double negation such as
+    "I did not say I never opened it" is left to the model, as the prompt asks.
+    """
+    tokens = re.findall(r"[a-z]+(?:'[a-z]+)?", sentence.casefold().replace("\u2019", "'"))
+    denied, hedged, convoluted = set(), set(), False
+    for i, token in enumerate(tokens):
+        if not NEG_TOKEN.match(token):
+            continue
+        j = i + 1
+        while j < len(tokens) and tokens[j] in FILLERS:
+            j += 1
+        if j >= len(tokens):
+            continue
+        word = tokens[j]
+        if word in SPEECH_WORDS:
+            convoluted = True
+        elif word in HEDGE_WORDS:
+            verb = next((tokens[k] for k in range(j + 1, min(j + 7, len(tokens))) if tokens[k] in VERB_FORMS), None)
+            if verb:
+                hedged.add(VERB_FORMS[verb])
+        elif word in VERB_FORMS:
+            denied.add(VERB_FORMS[word])
+    if convoluted:
+        denied, hedged = set(), set()
+    has_negation = convoluted or any(NEG_TOKEN.match(t) or t in OTHER_NEGATION for t in tokens)
+    return denied, hedged, convoluted, has_negation
+
+
+def action_matches(claim_action, found):
+    """'open' alone could be a document or a program; every other verb names one action."""
+    return claim_action in {"open_document", "launch_program"} if found == "open" else claim_action == found
+
+
+def fix_polarity(draft):
+    """Hedges are neither assertions nor denials; a denial flag needs a negation in the sentence."""
+    denied, hedged, convoluted, has_negation = analyse_sentence(draft.sentence)
+    if convoluted:
+        return draft
+    if any(action_matches(draft.action, found) for found in hedged):
+        note = "The host read the witness as not remembering or being unsure, which is neither a denial nor an assertion; the verdict cannot be supported or contradicted"
+        return draft.model_copy(update={"negated": False, "uncertainty": [*draft.uncertainty, *([] if NO_RECALL in draft.uncertainty else [NO_RECALL])],
+                                        "interpretation_notes": [*draft.interpretation_notes, note]})
+    if draft.negated and not has_negation and draft.action in SUPPORTED_ACTIONS:
+        raise ValueError(f"claim {draft.claim_id}: marked as a denial, but the sentence contains no negation; set negated=false for a positive statement, keeping the source sentence unchanged")
+    return draft
+
+
+def require_denials_covered(drafts):
+    """A sentence that denies an activity must produce a negated claim for it, or the denial is never assessed."""
+    for sentence in dict.fromkeys(d.sentence for d in drafts):
+        denied, _, convoluted, _ = analyse_sentence(sentence)
+        if convoluted:
+            continue
+        for found in sorted(denied):
+            if not any(d.sentence == sentence and d.negated and action_matches(d.action, found) for d in drafts):
+                phrase = {"open": "opening", "download_file": "downloading", "recycle_file": "deleting", "launch_program": "using or launching"}[found]
+                raise ValueError(f"the sentence {sentence[:80]!r} denies {phrase} something, but no negated claim covers that activity; add a separate claim for it with negated=true, keeping the source sentence unchanged")
+
 
 PLACEHOLDERS = {"", "-", "none", "n/a", "na", "nil", "null", "no", "not applicable", "no uncertainty"}
 
@@ -163,7 +241,7 @@ def extract_claims(case, client, budget):
             drafts = DraftBatch.model_validate_json(turn.content).claims
             if not drafts and case.testimony.strip():
                 raise ValueError("No claims extracted from nonempty testimony")
-            ids, interpretations, claims = set(), set(), []
+            ids, interpretations, claims, normalized = set(), set(), [], []
             for draft in drafts:
                 if draft.claim_id in ids:
                     raise ValueError("Duplicate claim ID")
@@ -171,6 +249,8 @@ def extract_claims(case, client, budget):
                 draft = draft.model_copy(update={"uncertainty": without_placeholders(draft.uncertainty), "interpretation_notes": without_placeholders(draft.interpretation_notes)})
                 draft = normalize_action(draft)
                 validate_activity_scope(draft)
+                draft = fix_polarity(draft)
+                normalized.append(draft)
                 stated = draft.time_expression
                 if stated is not None and (not stated.strip() or stated.casefold() not in case.testimony.casefold()):
                     raise ValueError(f"time_expression {stated!r} is not words from the testimony; copy the witness's own words for the time, or use null when no time was stated")
@@ -196,6 +276,7 @@ def extract_claims(case, client, budget):
                     # on, any bound it supplies is made up, so the host removes it rather than ask again.
                     claim = claim.model_copy(update={"resolved_start": None, "resolved_end": None, "interpretation_notes": [*claim.interpretation_notes, NO_DATE_NOTE]})
                 claims.append(claim)
+            require_denials_covered(normalized)
             return claims
         except (ValueError, ValidationError) as exc:
             if attempt == 2:
