@@ -55,12 +55,15 @@ def test_claim_view_drops_the_shared_sentence_and_empty_fields():
     assert "uncertainty" not in view and "resolved_start" not in view
 
 
-def test_coverage_view_lists_unparsed_families_by_name_only():
+def test_coverage_view_distinguishes_source_counts_from_family_markers():
     from veritrace.agents.hints import coverage_view
     view = coverage_view([entry("lnk", item_id="lnk01"), entry("jumplist", "unsupported", 0, reason="Family outside enabled coverage"), entry("prefetch", "unsupported", 0), entry("recyclebin", "failed", 0, error_code="parser_exit")])
-    assert view["not_covered"] == ["jumplist", "prefetch"]
-    assert [r["family"] for r in view["sources"]] == ["lnk", "recyclebin"]
-    assert view["sources"][1]["error"] == "parser_exit"
+    rows = {r["family"]: r for r in view["families"]}
+    assert rows["lnk"] == {"family": "lnk", "items": 1, "records": 1, "statuses": {"parsed": 1}}
+    assert rows["jumplist"]["items"] == 0 and rows["jumplist"]["statuses"] == {"unsupported": 1}
+    assert rows["recyclebin"]["statuses"] == {"failed": 1}
+    assert "parser_exit" not in str(view)
+    assert view["detail_tool"] == "get_source_coverage"
 
 
 def test_pronoun_target_is_replaced_by_the_nearest_named_file_for_the_model():
@@ -91,3 +94,60 @@ def test_tool_search_hint_keeps_an_unactionable_claim_unresolved():
     from veritrace.agents.hints import tool_search_hint
     only = [claim("c", "visit_page", "it")]
     assert tool_search_hint("case01", only[0], only) is None
+
+
+def test_family_can_show_rejects_records_from_the_wrong_source():
+    from tests.factories import make_claim, make_record
+    from veritrace.agents.hints import family_can_show
+    opened = make_claim(action="open_document")
+    assert not family_can_show(opened, [make_record(family="recyclebin")])
+    assert family_can_show(opened, [make_record(family="recyclebin"), make_record(family="lnk")])
+    assert family_can_show(make_claim(action="recycle_file"), [make_record(family="recyclebin")])
+    assert family_can_show(make_claim(action="something_else"), [make_record(family="recyclebin")])
+
+
+def test_edge_record_shows_opening_only_when_the_browser_says_it_was_opened():
+    from tests.factories import make_claim, make_record
+    from veritrace.agents.hints import family_can_show
+    opened = make_claim(action="open_document")
+    assert not family_can_show(opened, [make_record(family="edge_history", raw_fields={"opened": 0})])
+    assert not family_can_show(opened, [make_record(family="edge_history", raw_fields={"id": 7})])
+    assert family_can_show(opened, [make_record(family="edge_history", raw_fields={"opened": 1})])
+    assert family_can_show(make_claim(action="download_file"), [make_record(family="edge_history", raw_fields={"opened": 0})])
+
+
+def timed(role, **overrides):
+    from datetime import datetime, timezone
+    from tests.factories import make_record
+    from veritrace.evidence.models import EvidenceTime
+    stamp = EvidenceTime(role=role, raw_value=1, raw_encoding="x", raw_precision="us", normalized_utc=datetime(2026, 10, 16, 8, 25, 19, tzinfo=timezone.utc))
+    return make_record(times=[stamp], **overrides)
+
+
+def test_shows_action_needs_the_right_kind_of_record_target_and_time():
+    from tests.factories import make_claim
+    from veritrace.agents.hints import shows_action
+    claim = make_claim(target="report.pdf")
+    zone = "Asia/Singapore"
+    assert shows_action(claim, timed("download_started"), [claim], zone)
+    assert not shows_action(claim, timed("visit_time"), [claim], zone)          # a page visit is not a download
+    assert not shows_action(claim, timed("download_started", target="other.docx"), [claim], zone)
+    assert not shows_action(make_claim(target="report.pdf", time_expression="5:10 pm"), timed("download_started"), [claim], zone)
+    assert shows_action(make_claim(target="report.pdf", time_expression="4:25 pm"), timed("download_started"), [claim], zone)
+
+
+def test_consistency_problem_only_for_a_denial_supported_or_anything_unverified():
+    from tests.factories import make_claim
+    from veritrace.agents.hints import consistency_problem
+    assert consistency_problem(make_claim(negated=True), "supported")
+    assert consistency_problem(make_claim(negated=False), "unverified")
+    assert consistency_problem(make_claim(negated=True), "unverified")
+    assert not consistency_problem(make_claim(negated=False), "supported")
+    assert not consistency_problem(make_claim(negated=True), "contradicted")
+
+
+def test_generic_nouns_like_program_or_application_are_not_search_words():
+    from veritrace.agents.hints import target_word
+    assert target_word("the Notepad program") == "Notepad"
+    assert target_word("Steam application") == "Steam"
+    assert target_word("the program") is None

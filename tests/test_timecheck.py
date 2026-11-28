@@ -61,11 +61,13 @@ def run_supported(tmp_path, expression, stamp):
     return run_status(tmp_path, expression, stamp)
 
 
-def test_supported_with_a_mismatching_clock_time_is_withheld(tmp_path):
-    """Regression: qwen3:8b called a 5:10 pm claim 'supported' against a 16:25 download."""
+def test_supported_with_a_mismatching_clock_time_is_not_kept(tmp_path):
+    """Regression: qwen3:8b called a 5:10 pm claim 'supported' against a 16:25 download. The only record for this
+    action is at another time, so the host now answers contradicted (see tests/test_time_contradiction.py for when it
+    stays inconclusive)."""
     result = run_supported(tmp_path, "5:10 pm", "2026-10-16T08:25:19")
     (assessment,) = result.assessments
-    assert assessment.status == "inconclusive"
+    assert assessment.status == "contradicted"
     assert "Host time check" in assessment.justification and "16:25:19" in assessment.justification
     assert any("host time check" in limit for limit in assessment.limitations)
     assert assessment.cited_record_ids == [make_record().record_id]
@@ -142,3 +144,35 @@ def test_a_full_context_before_any_search_is_still_a_claim_error(tmp_path):
     result = verify_claims(case, [make_claim()], client, AlwaysFull(), tools)
     tools.index.connection.close()
     assert result.claim_errors["claim01"]["code"] == "context_limit" and not result.assessments
+
+
+def test_approximate_clock_time_is_checked_with_a_wide_window():
+    """Regression (held-out PDF run): 'about 10:00 am' against a 15:15 download was left to the model, which called it close."""
+    from veritrace.agents.timecheck import time_conflict
+    record = record_at("2026-11-26T07:15:40")  # 15:15:40 in Asia/Singapore
+    assert "none is within 60 minutes" in time_conflict(make_claim(time_expression="about 10:00 am"), [record], "Asia/Singapore")
+    assert time_conflict(make_claim(time_expression="roughly 10 am"), [record], "Asia/Singapore")
+    assert time_conflict(make_claim(time_expression="around 3 pm"), [record], "Asia/Singapore") is None  # 15:15 is inside the hour
+    assert time_conflict(make_claim(time_expression="~3:30 pm"), [record], "Asia/Singapore") is None
+
+
+def test_range_and_direction_wording_is_still_left_to_the_model():
+    from veritrace.agents.timecheck import approximate_seconds, time_conflict
+    record = record_at("2026-11-26T07:15:40")
+    for text in ("between 9 and 10 am", "before 10:00 am", "sometime after 9 am", "maybe 10 am", "early 10 am"):
+        assert approximate_seconds(text) is None
+        assert time_conflict(make_claim(time_expression=text), [record], "Asia/Singapore") is None
+    assert approximate_seconds("about the morning") is None  # no clock time to compare
+
+
+def test_approximate_time_never_lets_the_host_decide_a_contradiction():
+    from veritrace.agents.timecheck import time_agrees
+    record = record_at("2026-11-26T07:15:40")
+    assert not time_agrees(make_claim(time_expression="about 3:15 pm"), [record], "Asia/Singapore")
+
+
+def test_supported_with_an_approximate_time_far_from_the_record_is_withheld(tmp_path):
+    (assessment,) = run_supported(tmp_path / "far", "about 10:00 am", "2026-10-16T08:25:19").assessments
+    assert assessment.status == "contradicted" and "Host time check" in assessment.justification
+    (kept,) = run_supported(tmp_path / "near", "about 4:30 pm", "2026-10-16T08:25:19").assessments
+    assert kept.status == "supported"

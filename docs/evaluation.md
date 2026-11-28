@@ -33,10 +33,23 @@ error column, macro-F1, accuracy, failure counts, tool dispatches, parser failur
 known-record retrieval and a human citation-review packet. Missing/ambiguous
 claim alignments count as operational errors. Extra generated claims are reported
 separately. Zero denominators yield 0 with an explicit policy note. This metric
-engine is tested; **no acquired corpus or measured forensic results exist yet**.
+engine is tested; **no independently reviewed acquired evaluation corpus or
+formal classification-accuracy results have been produced**. Initial acquired
+development checks and their source/claim limits are recorded in
+[standard01 development tests](standard01-development-tests.md). These scenarios
+reuse one acquisition, and cached native-output replays are distinguished from
+fresh native-parser execution. They do not count as independent held-out cases.
 
 Human reviewers rate relevance/sufficiency separately from citation identity.
 Record repeated-run agreement, latency/resource observations and participant
 experience. Compare a manual timeline/keyword workflow over the same available
 records; counterbalance case/order where possible. Do not claim time or accuracy
 improvements from unit tests or the upstream parser smoke check.
+
+For independent labelling, use separate reviewer sheets before comparing ratings
+or viewing model verdicts. Record actual reviewer identities and resolutions;
+draft agent-prepared expectations are not reviewed labels. The development
+packet supplies case-specific source availability alongside the complete source
+reference corpus, so excluded/corrupted records are not credited. Use opaque
+case IDs and target filenames in held-out collection rather than descriptive
+development scenario names that may cue the expected outcome.

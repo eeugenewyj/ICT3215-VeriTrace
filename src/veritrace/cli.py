@@ -3,6 +3,7 @@ import json
 import sys
 from pathlib import Path
 
+from . import progress
 from .errors import InputError, VeriTraceError
 from .runtime.benchmark import benchmark
 from .runtime.budget import ContextBudget
@@ -22,14 +23,23 @@ def main(argv=None):
     run.add_argument("--config", type=Path, required=True)
     run.add_argument("--case", type=Path, required=True)
     run.add_argument("--output", type=Path, required=True)
+    report = commands.add_parser("report", help="Regenerate a recorded report without model inference")
+    report.add_argument("--run", type=Path, required=True)
+    report.add_argument("--output", type=Path, required=True)
+    report.add_argument("--diagnostics", type=Path)
     evaluate = commands.add_parser("evaluate", help="Evaluate a frozen labelled corpus")
     evaluate.add_argument("--config", type=Path, required=True)
     evaluate.add_argument("--corpus", type=Path, required=True)
     evaluate.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "report":
+            from .report.review import regenerate_report
+            print(json.dumps(regenerate_report(args.run, args.output, args.diagnostics), ensure_ascii=False, indent=2))
+            return 0
         settings = load_settings(args.config)
         if args.command == "evaluate":
+            progress.ENABLED = False  # many cases in a row; the metrics are the output
             from .evaluation.corpus import evaluate_corpus
             result = evaluate_corpus(args.corpus, args.output, settings, config_path=args.config)
             print(json.dumps(result["metrics"], ensure_ascii=False, indent=2))
@@ -37,7 +47,9 @@ def main(argv=None):
         if args.command == "run":
             from .service import run_case
             result = run_case(args.case, args.output, settings)
+            progress.final(result)
             print(json.dumps({"status": result.status, "report": result.output_paths["report.html"], "errors": result.errors, "claim_errors": result.claim_errors}, ensure_ascii=False, indent=2))
+            progress.warning()
             return {"complete": 0, "error": 3, "partial": 4}[result.status]
         with OllamaClient(settings) as client:
             metadata = client.metadata()

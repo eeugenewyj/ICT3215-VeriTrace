@@ -11,6 +11,16 @@ already give application/activity times; get_record supplies additional details.
 Do not repeat a search unchanged. Finalize once enough evidence exists for a
 qualified or uncertain assessment.
 
+Coverage is a computed family summary: items counts supplied files; statuses
+counts coverage entries, including family-level markers when no file exists.
+Failed, empty, unavailable and unsupported are distinct; none proves an action
+did not happen. The other row groups unknown/undeclared families. For per-source
+diagnostics call get_source_coverage with details=true, optional family/status/
+item_id filters and limit 5; follow next_cursor with the same filters as needed.
+Long diagnostics are labelled excerpts; full values remain in coverage.json.
+Coverage is not activity evidence and cannot replace a search. Consider relevant
+conflicting records as well as supporting ones; disclose incomplete retrieval.
+
 supported: positive relevant evidence is consistent with interpreted activity
 at the claimed target/time precision. Support is not certainty. Qualify what
 the records establish, including attribution/reading limits; a direct opening
@@ -19,6 +29,10 @@ contradicted: positive evidence conflicts with the interpreted claim. Absence
 alone never contradicts.
 unverified: no sufficient relevant evidence was located, or the action is
 outside coverage.
+A returned record from a family that can show the action, on the claim's
+target, is relevant evidence even when it carries limits (for example a
+recent-file trace that does not prove reading). With one, never answer
+unverified: answer supported with the limits stated, or inconclusive.
 inconclusive: relevant evidence exists but ambiguity, conflict, time uncertainty
 or essential attribution limits prevent a defensible assessment. Use this for
 relevant-but-ambiguous evidence, not unverified merely for lack of certainty.

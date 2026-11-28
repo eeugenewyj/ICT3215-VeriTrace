@@ -4,6 +4,7 @@ import time
 import uuid
 from pathlib import Path
 
+from . import progress
 from .agents.claims import extract_claims, load_prompt
 from .agents.context import POLICY as CONTEXT_POLICY
 from .agents.citations import validate_citations
@@ -77,6 +78,7 @@ def run_case(input_dir: Path, output_dir: Path, settings, *, client=None, budget
     case = register_case(input_dir, output_dir)
     ledger = ToolLedger(case.working_root / "tool_calls.jsonl")
     ledger.path.touch(exist_ok=False)
+    progress.case_started(case)
     owned = client is None
     client = client or OllamaClient(settings)
     claims, assessments, records, claim_errors, errors, metadata = [], [], [], {}, [], {}
@@ -87,6 +89,7 @@ def run_case(input_dir: Path, output_dir: Path, settings, *, client=None, budget
             metadata = client.metadata()
             budget = budget or ContextBudget(settings, metadata)
             claims = extract_claims(case, client, budget)
+            progress.claims_extracted(claims)
             verification = verify_claims(case, claims, client, budget, tools)
             assessments, claim_errors = verification.assessments, verification.claim_errors
             coverage = tools.coverage
@@ -117,7 +120,7 @@ def run_case(input_dir: Path, output_dir: Path, settings, *, client=None, budget
     runtime = {"case_metadata": case.manifest.model_dump(mode="json", exclude={"items"}), "model_calls": getattr(client, "calls", None), "resource_measurements": "unknown; collect host observations during the desktop benchmark", "model": metadata, "settings": settings.model_dump(mode="json"), "prompt_hashes": {name: hashlib.sha256(load_prompt(name).encode()).hexdigest() for name in ("claims", "verify")}, "duration_s": time.perf_counter() - started, "enabled_families": settings.enabled_families, "gpu_backend": "unknown; retain desktop benchmark logs", "interpretation": "Available-evidence assessment; investigator makes final decision"}
     runtime["context_compaction"] = {"policy": CONTEXT_POLICY, "record_projections_replaced": tools.context_compactions,
                                      "scope": "Only identical repeated data is referenced; full tool receipts and records are retained."}
-    names = ("report.html", "claims.json", "assessments.json", "coverage.json", "run.json", "tool_calls.jsonl", "evidence.sqlite", "registration.json")
+    names = ("report.html", "claims.json", "assessments.json", "coverage.json", "coverage-summary.json", "run.json", "tool_calls.jsonl", "evidence.sqlite", "registration.json")
     result = RunResult(run_id="run_" + uuid.uuid4().hex[:20], case_id=case.manifest.case_id, testimony=case.testimony, testimony_sha256=case.testimony_sha256, status=status, claims=claims, assessments=assessments, claim_errors=claim_errors, errors=errors, coverage=coverage, records=records, tool_receipts=ledger.entries, runtime_metadata=runtime, output_paths={n: str(case.working_root / n) for n in names})
     for name, values in (("claims", claims), ("assessments", assessments), ("coverage", coverage)):
         (case.working_root / f"{name}.json").write_text(json.dumps([v.model_dump(mode="json") for v in values], ensure_ascii=False, indent=2), encoding="utf-8")

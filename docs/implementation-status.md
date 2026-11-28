@@ -1,6 +1,217 @@
 # Implementation and validation status
 
-Updated 15 November 2026 after controlled Jump List integration and local commit.
+Updated 28 November 2026 after controlled development tests and integration of
+upstream commits 737b03e (denials and uncertainty) and 5e8cd16 (clock checks).
+
+## Current desktop checkpoint: controlled development tests
+
+The latest merge combines the incoming bounded case-index clock-mismatch check
+with the existing calendar and generic-target guards. Date-only statements do
+not enable clock contradiction, and records found only on another local day
+leave the time assessment inconclusive. Same-day clock mismatches retain the
+incoming behavior. The merged suite reports **353 passed, one integration test
+deselected**, including three added calendar/clock interaction regressions.
+These checks are recorded under `.runs/merge-20261128-time-checks/`.
+The live model results below predate this latest clock-check merge; no new
+model run or formal accuracy result is claimed for it.
+
+The original test pack contains 13 scenarios and 27 draft atomic label rows from
+one standard01 acquisition. Four recorded source versions completed 23 live
+local-model workflow runs, including retained failures. Three original baseline
+repetitions agreed on all five claim interpretations, verdicts and citation
+sets; agreement is not accuracy. A later five-positive baseline also completed.
+
+Testing exposed cropped source fragments, ten-claim response truncation,
+calendar-date mismatches and generic targets inheriting previous filenames.
+The fixes enforce complete source sentences at clear boundaries, batch longer
+testimony within the existing response limit, compare explicit dates in the
+source timezone, and reserve filename inheritance for explicit pronouns.
+Prior context contains entity/time references rather than full assertions.
+The final pre-merge ten-claim run completed five supported, three contradicted
+and two unverified assessments without run, claim or tool errors. The generic
+document stayed generic in the actual model-facing claim and search hint.
+
+All 245 original export hashes, all 13 prepared inputs and the reference native
+output cache were rechecked unchanged. Matching inputs reuse hash-verified
+native outputs while changed inputs enter their configured adapter; these are
+genuine local-model/dispatcher checks, not fresh six-parser validation or parser
+latency measurements. Earlier extraction errors, a context-echo failure, the
+known intermediate generic-target projection defect and an interrupted attempt
+remain available. The interrupted attempt has no fabricated verdict.
+
+The pre-merge suite passed 318 tests with one integration test deselected. The
+last filename-boundary guard was checked against all six actual recorded Agent 1
+turns: requests, schemas and all ten claims were identical under deterministic
+replay. Live and final pre-merge source fingerprints are retained separately.
+Reviewed report views show 143 parsed Prefetch inputs and explain all 41
+unparsed inputs while retaining original outcomes and byte-identical run JSON.
+The comparison and audit are `.runs/standard01-development04/comparison.html`
+and `completion.json`. See [development test details](standard01-development-tests.md).
+
+Upstream 737b03e adds compound-denial completeness checks, explicit no-recall
+uncertainty handling and assessment guidance for relevant but limited records.
+It was fast-forwarded into this checkout and combined with the local fixes;
+the merged suite passes **340 tests, one integration deselected**, including
+later-batch denial repair and uncertainty isolation. The recovery stash and
+merge receipts are recorded under `.runs/merge-20261128-agent-fixes/`.
+Post-merge live regressions are recorded separately in
+`.runs/standard01-development05/`; earlier observations are not relabelled as
+results of the merged prompts.
+
+Both post-merge runs completed. The ten-claim case returned five supported,
+three contradicted and two unverified assessments. One mistyped case ID in a
+get_record request was rejected, then corrected successfully on the next call;
+both receipts remain recorded. The new compound-denial/no-recall case returned
+supported, contradicted and inconclusive. Its first extraction omitted the
+opening denial; the completeness guard rejected it and the repair retained all
+three claims. Neither run has run or claim errors. Actual model-facing generic
+targets and no-recall uncertainty were checked, along with spans and citations.
+
+Across versions there are now **25 completed workflow runs, 14 development
+scenarios and 30 draft atomic rows**, all from one acquisition. All original
+exports, all 14 prepared inputs and the reference native cache remain unchanged.
+The latest index is `.runs/standard01-development05/comparison.html`; its reviewed
+reports retain the 143 parsed Prefetch inputs and all 41 diagnostic explanations.
+Separate 30-row reviewer A/B sheets are in that version's `independent-review/`
+directory. Only two scenarios were rerun under the merged prompts.
+
+No independent human label reviews or formal classification scores have been
+completed. The separate reviewer A/B sheets include case-specific source
+availability and timezone metadata. These descriptive development scenarios
+are not independent acquisitions or blind held-out cases. Formal evaluation
+still requires independent adjudication, additional acquired cases and a
+frozen configuration. RAM remains preserved for later analysis.
+
+## Earlier desktop checkpoint: standard01 acquisition and coverage
+
+The frozen development case contains 245 owner-exported files from the stopped
+Windows 10 Pro victim. Independent source-field comparisons matched 238 decoded
+records across all six families: Edge 7, LNK 17, Jump Lists 30, Prefetch 143,
+UserAssist 38 and Recycle Bin 3. Coverage retains 173 parsed inputs, four valid
+empty Jump Lists, 41 failed Prefetch inputs and 27 unsupported extras/companions.
+The failures comprise 35 zero-byte files and six nonempty invalid signatures;
+the owner selected all .pf/.PF entries and did not confirm deleted-entry status.
+
+A subsequent read-only check against the complete preserved VMDK chain diagnosed
+the 41 failed input items: 30 are historical filenames in NTFS directory-index
+slack with no matching Prefetch-file MFT record; five are empty short-name alias
+exports whose actual streams are already supplied and parsed under long names;
+four refer to deleted files whose old clusters now belong to other live objects;
+two are deleted-file remnants whose invalid remaining bytes match their exports.
+Of the 30 directory remnants, 26 have complete stale references to reused MFT
+records and four have fragmentary entry headers. All 143 successfully parsed
+Prefetch exports match the image streams, including 138 allocated files and
+five readable deleted files. Notepad's trace is intact. All 245 original export
+hashes remain unchanged. The detailed report and raw metadata are retained in
+.runs/disk-standard01/prefetch-diagnosis01/diagnosis.html and diagnosis.json.
+Exact FTK empty-alias/zero-fill behavior and residual-corruption chronology remain
+unconfirmed; no free-space carving or older-snapshot recovery was performed.
+This isolated diagnostic reader does not implement product disk-image intake.
+Frozen input cases and their original failure coverage have not been rewritten.
+
+The reporting follow-up now shows **143 successfully parsed Prefetch inputs**
+and **41 unparsed inputs**, with all four diagnosis groups and file-by-file
+explanations. Supplied-file counts are separate from extracted-record counts;
+all 245 original coverage entries, original parser errors and assessment results
+remain available. Generic reports inspect failed working inputs for empty bytes
+or unrecognized Prefetch headers without inferring deleted/alias status.
+The case-specific image findings use a diagnostic addendum bound to the exact
+case/item IDs, source hashes and a hashed supporting report. Hash checks establish
+identity, not the correctness of a diagnostic interpretation. The new report
+command renders a fresh view without model inference or parser execution.
+.runs/standard01-true-report03/report.html is the reviewed view of run02; its
+run.json and registration.json are byte-identical to the originals. All 41
+diagnostic notes, ten existing assessment citations and original case hashes
+were checked. The suite now reports **240 passed, 1 integration deselected**.
+The recorded partial status remains: source limitations are explained separately
+from the five completed claim assessments, rather than converting failures into
+successful parses.
+
+The first complete-system attempt extracted five claims but all five stopped
+before evidence retrieval: the initial per-item coverage consumed the verified
+8,192-token budget. Including response reserve, requests required 8,472-8,514
+estimated tokens. The later final-answer fallback cannot repair an initial
+request that fails before any evidence search.
+
+Coverage is now computed by family/status/count, with unknown families grouped
+as other. Initial requests include response reserve and need 3,073-3,115
+estimated tokens. get_source_coverage defaults to a summary; filtered source
+details use bounded pages and labelled diagnostic excerpts. Complete coverage,
+failure messages, companion notes and extraction receipts remain in outputs.
+Continuation cursors bind to the case, filters and coverage snapshot. The unit
+suite reports **222 passed, 1 integration deselected**. A host-generated tool
+diagnostic retrieved all 41 actual failures exactly once across nine pages;
+this diagnostic is distinguished from model-generated requests.
+
+The genuine qwen3:8b replay used the same frozen 245-file case and matching
+8,192-token runtime profile. Both agents completed all five assessments with
+no claim errors, context errors or tool errors; the model returned supported
+for each positive statement. The report remains partial because the same 41
+Prefetch inputs failed. All 245 original export hashes, all original coverage
+entries/diagnostics, ten assessment citations and HTML fragment links were
+checked. These are mechanical and development checks, not measured accuracy.
+Repeated coverage queries and limited retrieval for the notes-file claim remain
+visible in the audit; independent relevance/attribution review is still needed.
+
+A separate earlier end-to-end denial statement did not pass semantic validation. Agent 1
+returned action='did not download' with negated=true, rather than the canonical
+download_file action, so the host marked it outside coverage and searched no
+records. The failed report remains .runs/standard01-denial-run01/report.html.
+An explicitly host-structured Agent 2 control changed only that action field,
+reused the recorded parser corpus through a genuine model-requested cache hit,
+and retrieved the conflicting download evidence. Its first supported answer was
+rejected by the existing host denial check; the corrected answer was contradicted
+with two validated citations. This component diagnostic does not turn the failed
+end-to-end denial into a pass. Its scope and outputs are retained in
+.runs/standard01-denial-agent2-control01/result.json.
+
+The Agent 1 fix now separates neutral action names from negation in the prompt
+and host normalization. Clear aliases, auxiliaries and contractions map to
+canonical actions with an interpretation note; placeholders request repair.
+Compound/qualified labels with ambiguous scope also request repair. Unsupported
+activities such as send_email and run_sql_query remain explicit. Source spans,
+targets and uncertainty are retained. Narrow activity-word and instrumental-app
+scope checks reject observed over-splits, then request a corrected complete
+batch within the existing two-repair limit. They do not silently delete claims
+or constitute a general language/negation validator.
+
+Three intermediate attempts are retained in standard01-denial-run02/run03/run04.
+Prompt changes alone did not prevent an extra Edge-launch denial; a later repair
+substituted an unasserted opening denial. These attempts are not acceptance
+passes. The final guards rejected both extra claims in live Agent 1 probes.
+The frozen denial, historical "never used Notepad", mixed polarity and unsupported
+email denial probes passed. The frozen denial used both allowed repairs; complete
+model responses and feedback are retained in the private probe receipt.
+The suite now reports **284 passed, 1 integration deselected**.
+
+The genuine end-to-end replay in .runs/standard01-denial-run05/ produced exactly
+one download_file claim with negated=true from the unchanged statement, searched
+the actual Edge records and returned contradicted with two validated citations.
+The existing host verdict check rejected the model's initial supported answer
+and requested correction; that intervention remains visible in the assessment.
+No run, claim or tool errors occurred. All 245 original export hashes, 238 indexed
+records, original coverage/diagnostics and report links were checked. The run
+remains partial for the same 41 Prefetch inputs. These are bounded development
+regressions; independent scope, citation relevance, sufficiency and attribution
+review and held-out evaluation remain required.
+
+The positive-case replay in .runs/standard01-true-run03/ also retained the five
+expected neutral action/target pairs and returned five supported assessments
+without run, claim or tool errors. Its ten citations, all original coverage
+entries and source hashes were checked. The notes-file assessment retrieved
+both LNK and Jump List records. This confirms the observed extraction/routing
+regressions; it does not establish classification accuracy or citation sufficiency.
+The detailed receipts and retained intermediate-source snapshots are in
+.runs/standard01-preparation/denial-fix-result01.json and denial-fix-iteration*/.
+
+Private records are in .runs/standard01-preparation/, with the new report at
+.runs/standard01-true-run02/report.html and the initial failure retained in
+.runs/standard01-true-run01/. An additional 204 .copy exports appeared after the
+first inventory; they are retained separately from the frozen comparison and
+are not silently treated as new independently acquired sources.
+
+## Historical checkpoint: 15 November 2026
+
 Development and analysis use the desktop checkout on codex/veritrace-prototype.
 The owner committed the acquired Jump List integration as f199b7b, based on
 6f413ac's published Agent 1/2 and PECmd updates. The original desktop clone was
@@ -271,8 +482,9 @@ Implementation rulings carried forward:
 4. Inspected UserAssist plugin output does not include binary value bytes;
    retain encoded names and exact hive locators, with bytes preserved in the hive.
 5. Six mappings were derived from pinned official source and controlled export
-   fixtures. Five now have acquired-source comparison passes and pinned
-   configured extraction; Edge's nonempty-source gate remains closed.
+   fixtures. The October checkpoint passed five acquired-source comparisons;
+   standard01 subsequently passed source-field comparisons across all six,
+   including nonempty Edge visits/downloads, with pinned configured extraction.
 6. Windows staging/copy tooling and an ignored execution ledger replace shell
    helpers incompatible with this environment; the ledger is retained because
    the full implementation plan still has owner-run acceptance work outstanding.
@@ -281,14 +493,15 @@ Implementation rulings carried forward:
 
 | Work | Required evidence |
 | --- | --- |
-| Victim acquisition rehearsal | RAM capture/transfer, stopped-VM preservation, FTK filesystem access and six families' source files received/hashed. Confirm source-folder completeness and historical snapshot/security metadata; a nonempty Edge sample is still needed. |
-| Parser deployment | Five acquired-source comparisons, pinned profiles and configured extraction passed. Obtain and independently compare a nonempty Edge visit/download sample, then enable its pinned profile. |
-| Genuine end-to-end run | Focused Jump List-only cases and opt-in acquired integration passed on 14 November. Broader six-family cases, classification/sufficiency review and repeatability evaluation remain pending. |
-| Evaluation | Reviewed development/held-out corpus, frozen configuration, source-removal variants, independent relevance/sufficiency ratings, repeatability and manual baseline. |
+| Acquisition | standard01 RAM capture/transfer and stopped-VM disk preservation are verified; six-family exports are received/hashed. Retain source limitations and confirm historical snapshot/security metadata where still unknown. New independent acquisitions remain necessary for the target corpus. |
+| Parser deployment | All six standard01 source-field comparisons passed (238 records). Validate new parser versions/source types before enabling them; the 41 diagnosed Prefetch input limitations remain explicit. |
+| Genuine end-to-end run | Six-family development runs and controlled variants completed with live local inference. Complete independent claim/citation relevance, sufficiency and attribution review; repeat the frozen final configuration for formal repeatability. |
+| Evaluation | Two actual independent reviewers, additional development/held-out acquisitions, opaque held-out identifiers, frozen configuration and manual baseline. Source-removal/corruption development checks and initial repeated-run agreement are recorded, without accuracy claims. |
 | Submission | Measured-results IEEE report, AI-use statement, final package/manual and subtitled demonstration video. |
 
-No classification accuracy, investigation-time improvement
-or six-family victim-validation result has been measured yet. GPU acceleration
+No formal classification accuracy, investigation-time improvement
+or held-out forensic quality has been measured yet. Six-family source-field
+comparisons and bounded development observations are recorded above. GPU acceleration
 was observed for the pinned desktop benchmark. Direct disk-image
 ingestion and memory interpretation are future milestones; current input is an
 acquired artefact folder.

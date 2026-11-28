@@ -149,4 +149,17 @@ def test_model_sees_second_precision_utc_and_a_compact_coverage_table():
     shown = model_view("get_source_coverage", {"coverage": [
         {"family": "lnk", "status": "parsed", "record_count": 1, "item_id": "lnk01", "companion_handling": [], "reason": None, "error_code": None},
         {"family": "jumplist", "status": "unsupported", "record_count": 0, "item_id": None, "companion_handling": [], "reason": "Family outside enabled coverage", "error_code": None}]})
-    assert shown == {"sources": [{"family": "lnk", "status": "parsed", "records": 1, "item_id": "lnk01"}], "not_covered": ["jumplist"]}
+    assert shown == {"families": [
+        {"family": "lnk", "items": 1, "records": 1, "statuses": {"parsed": 1}},
+        {"family": "jumplist", "items": 0, "records": 0, "statuses": {"unsupported": 1}}], "detail_tool": "get_source_coverage"}
+
+
+def test_every_family_is_shown_in_the_witness_local_time():
+    from datetime import datetime, timezone
+    from tests.factories import make_record
+    from veritrace.agents.tools import compact_record
+    from veritrace.evidence.models import EvidenceTime
+    stamp = EvidenceTime(role="recycle_bin_deletion", raw_value=1, raw_encoding="x", raw_precision="us", normalized_utc=datetime(2026, 11, 14, 7, 1, 5, tzinfo=timezone.utc))
+    shown = compact_record(make_record(family="recyclebin", times=[stamp]), "Asia/Singapore")["times"]
+    assert shown == [{"role": "recycle_bin_deletion", "local": "2026-11-14T15:01:05+08:00"}]
+    assert compact_record(make_record(family="lnk", times=[stamp]), "Not/AZone")["local_time_note"]

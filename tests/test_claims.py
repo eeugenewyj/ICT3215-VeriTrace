@@ -188,3 +188,197 @@ def test_bounds_kept_when_the_sentence_states_a_date(tmp_path):
     claim = make_claim(text, time_expression="5 October 2026 at 2 PM", resolved_start=at, resolved_end=at)
     claims = extract_claims(case, ReplayClient.from_contents([batch(draft_payload(claim))]), TestBudget())
     assert claims[0].resolved_start == at
+
+
+@pytest.mark.parametrize("action,target,negated,expected,expected_negated", [
+    ("never_used", "Notepad", False, "launch_program", True),
+    ("used_program", "Notepad", False, "launch_program", False),
+    ("ran", "Calculator", False, "launch_program", False),
+    ("never_downloaded", "setup.exe", False, "download_file", True),
+    ("deleted_file", "old notes", False, "recycle_file", False),
+    ("never_used", "Notepad", True, "launch_program", True),
+    ("send_email", None, False, "send_email", False),          # no supported meaning: kept as stated
+    ("run_sql_query", None, False, "run_sql_query", False),
+    ("open_network_port", None, False, "open_network_port", False),
+    ("remote_execute", None, False, "remote_execute", False),
+    ("opened", "report.pdf", False, "opened", False),          # open may mean a document or a program: left alone
+    ("used", "report.pdf", False, "used", False),              # a document target is not a program launch
+])
+def test_invented_actions_are_mapped_onto_supported_ones_by_code(action, target, negated, expected, expected_negated):
+    from veritrace.agents.claims import normalize_action
+    from veritrace.agents.models import ClaimDraft
+    draft = ClaimDraft(claim_id="c1", sentence="x", action=action, target=target, actor="I", negated=negated, time_expression=None, resolved_start=None, resolved_end=None, uncertainty=[], interpretation_notes=[])
+    out = normalize_action(draft)
+    assert (out.action, out.negated) == (expected, expected_negated)
+    assert bool(out.interpretation_notes) == (out.action != action)
+
+
+def test_never_used_notepad_reaches_verification_as_a_negated_program_launch(tmp_path):
+    from veritrace.agents.claims import extract_claims
+    text = "I have never used Notepad on this computer."
+    case = registered(tmp_path, text)
+    claim = make_claim(text, action="never_used", target="Notepad", negated=False)
+    result = extract_claims(case, ReplayClient.from_contents([batch(draft_payload(claim))]), TestBudget())
+    assert (result[0].action, result[0].negated) == ("launch_program", True)
+    assert "never_used" in result[0].interpretation_notes[-1]
+
+
+@pytest.mark.parametrize("action", ["did not download", "did_not_download", "didn't download", "didn’t download", "not_download_file"])
+def test_standard01_denial_keeps_its_span_and_reaches_a_supported_action(tmp_path, action):
+    """Replay the Agent 1 output that previously skipped all evidence searches."""
+    from veritrace.agents.claims import extract_claims
+    text = "On 28 November 2026, I did not download STD01-reference.pdf using Edge."
+    case = registered(tmp_path, text)
+    claim = make_claim(text, action=action, target="STD01-reference.pdf", negated=True)
+    client = ReplayClient.from_contents([batch(draft_payload(claim))])
+    result = extract_claims(case, client, TestBudget())
+    assert len(client.requests) == 1
+    assert (result[0].action, result[0].negated) == ("download_file", True)
+    assert (result[0].start, result[0].end, result[0].sentence) == (0, len(text), text)
+    assert result[0].target == claim.target
+    assert action in result[0].interpretation_notes[-1]
+
+
+@pytest.mark.parametrize("action,expected", [
+    ("have never used", "launch_program"),
+    ("did not launch program", "launch_program"),
+    ("not open document", "open_document"),
+    ("did not delete file", "recycle_file"),
+])
+def test_clear_negative_action_labels_separate_the_predicate_from_polarity(action, expected):
+    from veritrace.agents.claims import normalize_action
+    from veritrace.agents.models import ClaimDraft
+    draft = ClaimDraft(**draft_payload(make_claim("source", action=action, target="Notepad", negated=False)))
+    out = normalize_action(draft)
+    assert (out.action, out.negated) == (expected, True)
+
+
+@pytest.mark.parametrize("action", ["null", "NONE", "", "n/a", "unknown", "unsupported"])
+def test_placeholder_action_is_repaired_instead_of_accepted_as_outside_coverage(tmp_path, action):
+    from veritrace.agents.claims import extract_claims
+    text = "I have never used Notepad."
+    case = registered(tmp_path, text)
+    bad = make_claim(text, action=action, target="Notepad", negated=False)
+    corrected = bad.model_copy(update={"action": "launch_program", "negated": True})
+    client = ReplayClient.from_contents([batch(draft_payload(bad)), batch(draft_payload(corrected))])
+    claims = extract_claims(case, client, TestBudget())
+    assert len(client.requests) == 2
+    assert "action" in client.requests[1]["messages"][-1]["content"]
+    assert (claims[0].action, claims[0].negated) == ("launch_program", True)
+
+
+def test_repeated_placeholder_denial_is_an_extraction_error_not_a_truth_assessment(tmp_path):
+    from veritrace.agents.claims import extract_claims
+    from veritrace.errors import ModelError
+    case = registered(tmp_path, "I have never used Notepad.")
+    bad = make_claim(case.testimony, action="null", target="Notepad", negated=False)
+    client = ReplayClient.from_contents([batch(draft_payload(bad))] * 3)
+    with pytest.raises(ModelError, match="action"):
+        extract_claims(case, client, TestBudget())
+    assert len(client.requests) == 3
+
+
+@pytest.mark.parametrize("action", ["not not download", "never stop using", "download and email", "not only download"])
+def test_ambiguous_action_labels_request_repair_without_guessing_scope(tmp_path, action):
+    from veritrace.agents.claims import extract_claims
+    from veritrace.errors import ModelError
+    case = registered(tmp_path, "I did not only download the file; I emailed it too.")
+    bad = make_claim(case.testimony, action=action)
+    client = ReplayClient.from_contents([batch(draft_payload(bad))] * 3)
+    with pytest.raises(ModelError, match="action"):
+        extract_claims(case, client, TestBudget())
+
+
+def test_negation_belongs_to_each_atomic_action_not_to_the_whole_sentence(tmp_path):
+    from veritrace.agents.claims import extract_claims
+    text = "I did not download report.pdf, but I opened it."
+    case = registered(tmp_path, text)
+    denial = make_claim(text, action="did not download", negated=True)
+    opened = make_claim(text, claim_id="claim02", action="open_document", negated=False)
+    claims = extract_claims(case, ReplayClient.from_contents([batch(draft_payload(denial), draft_payload(opened))]), TestBudget())
+    assert [(c.action, c.negated) for c in claims] == [("download_file", True), ("open_document", False)]
+
+
+def test_canonical_qualified_denial_and_unsupported_activity_are_not_rewritten(tmp_path):
+    from veritrace.agents.claims import extract_claims
+    text = "I do not think I downloaded report.pdf. I never emailed it."
+    case = registered(tmp_path, text)
+    denial = make_claim("I do not think I downloaded report.pdf.", negated=True, uncertainty=["I do not think"])
+    email = make_claim("I never emailed it.", claim_id="claim02", action="send_email", negated=True)
+    claims = extract_claims(case, ReplayClient.from_contents([batch(draft_payload(denial), draft_payload(email))]), TestBudget())
+    assert [(c.action, c.negated) for c in claims] == [("download_file", True), ("send_email", True)]
+    assert claims[0].uncertainty == ["I do not think"]
+    assert all(c.interpretation_notes == [] for c in claims)
+
+
+@pytest.mark.parametrize("text", [
+    "On 28 November 2026, I did not download STD01-reference.pdf using Edge.",
+    "I downloaded report.pdf with Edge.",
+    "I opened report.pdf in Edge.",
+])
+def test_instrumental_app_is_not_a_separate_program_claim_and_batch_is_repaired(tmp_path, text):
+    from veritrace.agents.claims import extract_claims
+    case = registered(tmp_path, text)
+    activity = make_claim(text, action="open_document" if "opened" in text else "download_file", negated="did not" in text)
+    extra = make_claim(text, claim_id="claim02", action="launch_program", target="Edge", negated=activity.negated)
+    client = ReplayClient.from_contents([batch(draft_payload(activity), draft_payload(extra)), batch(draft_payload(activity))])
+    result = extract_claims(case, client, TestBudget())
+    assert result == [activity]
+    assert len(client.requests) == 2
+    repair = client.requests[1]["messages"][-1]["content"]
+    assert "Omit this extra launch_program claim" in repair or "not expressed in this source sentence" in repair
+
+
+def test_repeated_instrumental_app_over_split_exhausts_repairs(tmp_path):
+    from veritrace.agents.claims import extract_claims
+    from veritrace.errors import ModelError
+    text = "I did not download report.pdf using Edge."
+    case = registered(tmp_path, text)
+    activity = make_claim(text, negated=True)
+    extra = make_claim(text, claim_id="claim02", action="launch_program", target="Edge", negated=True)
+    body = batch(draft_payload(activity), draft_payload(extra))
+    with pytest.raises(ModelError, match="only the means"):
+        extract_claims(case, ReplayClient.from_contents([body] * 3), TestBudget())
+
+
+@pytest.mark.parametrize("text", [
+    "I launched Edge and downloaded report.pdf using Edge.",
+    "I did not download report.pdf using Edge, but I launched it.",
+    "I was using Edge while I downloaded report.pdf.",
+    "I have never used Edge.",
+    "I opened Edge.",
+])
+def test_program_assertions_with_independent_scope_are_not_removed(tmp_path, text):
+    from veritrace.agents.claims import extract_claims
+    case = registered(tmp_path, text)
+    program = make_claim(text, action="launch_program", target="Edge", negated="never" in text)
+    # A sentence that denies the download needs its own negated claim, which the real model returns alongside the launch.
+    denied = [make_claim(text, claim_id="claim02", action="download_file", target="report.pdf", negated=True)] if "did not download" in text else []
+    claims = extract_claims(case, ReplayClient.from_contents([batch(*(draft_payload(c) for c in [program, *denied]))]), TestBudget())
+    assert program in claims and len(claims) == 1 + len(denied)
+
+
+@pytest.mark.parametrize("extra_action", ["open_document", "recycle_file"])
+def test_repair_cannot_replace_an_instrumental_claim_with_another_unasserted_activity(tmp_path, extra_action):
+    from veritrace.agents.claims import extract_claims
+    text = "I did not download report.pdf using Edge."
+    case = registered(tmp_path, text)
+    download = make_claim(text, negated=True)
+    extra = make_claim(text, claim_id="claim02", action=extra_action, negated=True)
+    client = ReplayClient.from_contents([batch(draft_payload(download), draft_payload(extra)), batch(draft_payload(download))])
+    assert extract_claims(case, client, TestBudget()) == [download]
+    assert "not expressed in this source sentence" in client.requests[1]["messages"][-1]["content"]
+
+
+@pytest.mark.parametrize("text,action,target", [
+    ("I read report.pdf.", "open_document", "report.pdf"),
+    ("I viewed report.pdf.", "open_document", "report.pdf"),
+    ("I used Notepad.", "launch_program", "Notepad"),
+    ("I moved report.pdf to the Recycle Bin.", "recycle_file", "report.pdf"),
+    ("I obtained a copy of report.pdf.", "download_file", "report.pdf"),
+])
+def test_scope_cues_do_not_require_one_fixed_verb_or_rewrite_unrecognized_phrasing(tmp_path, text, action, target):
+    from veritrace.agents.claims import extract_claims
+    case = registered(tmp_path, text)
+    claim = make_claim(text, action=action, target=target)
+    assert extract_claims(case, ReplayClient.from_contents([batch(draft_payload(claim))]), TestBudget()) == [claim]
