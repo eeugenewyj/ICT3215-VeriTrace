@@ -40,8 +40,8 @@ class UserAssistAdapter:
         path = output / "export.csv"
         if not path.is_file():
             raise ParserError("RECmd batch CSV is missing")
-        records = []
         digest = sha256_file(path)
+        counted, others = [], []
         with path.open(encoding="utf-8-sig", newline="") as stream:
             reader = csv.DictReader(stream)
             required = {"HivePath", "KeyPath", "ValueName", "ValueData", "ValueData2", "ValueData3", "PluginDetailFile"}
@@ -50,28 +50,53 @@ class UserAssistAdapter:
             previous = reader.line_num
             for row in reader:
                 line, previous = previous + 1, reader.line_num
-                if "\\UserAssist\\" not in row["KeyPath"] or not row["KeyPath"].endswith("\\Count"):
-                    raise ParserError("Batch includes sources outside UserAssist Count keys")
                 if Path(row["HivePath"]).resolve() != source.resolve():
                     raise ParserError("Batch identifies another source hive")
-                detail = row.get("PluginDetailFile")
-                if not detail:
-                    raise DependencyError("No decoded UserAssist plugin detail; generic Registry output is insufficient")
-                detail_path = Path(detail) if Path(detail).is_absolute() else output / detail
-                check_ancestors(detail_path)
-                if not detail_path.resolve().is_relative_to(output) or not detail_path.is_file():
-                    raise ParserError("Plugin detail is missing or outside controlled output")
-                with detail_path.open(encoding="utf-8-sig", newline="") as details:
-                    plugin_rows = list(csv.DictReader(details))
-                if not any(r.get("ProgramName") == row["ValueData"] and r.get("RunCounter") for r in plugin_rows):
-                    raise DependencyError("Decoded UserAssist fields cannot be corroborated in plugin detail")
-                if not row["ValueData2"].startswith("Last executed: ") or not row["ValueData3"].startswith("Run count: "):
-                    raise ParserError("Unsupported UserAssist decoder field format")
-                raw_time = row["ValueData2"].removeprefix("Last executed: ").strip()
-                normalized = native_time(raw_time.replace(" ", "T") + "Z" if raw_time else None, "iso8601", "userassist_last_execution")
+                # A recursive batch on ...\UserAssist also emits the parent key's rows (the same entries again)
+                # and one valueless row per {GUID} subkey. Only ...\{GUID}\Count rows become records.
+                if "\\UserAssist\\" in row["KeyPath"] and row["KeyPath"].endswith("\\Count"):
+                    counted.append((line, row))
+                else:
+                    others.append((line, row))
+        if not counted:
+            raise ParserError("Batch produced no UserAssist Count rows")
+        echoed = {self._signature(row) for _, row in counted}
+        for _, row in others:
+            if not row["ValueName"] or self._signature(row) in echoed or self._is_format_version(row):
+                continue
+            raise ParserError("Batch row outside UserAssist Count keys carries data not present under a Count key")
+        records = []
+        for line, row in counted:
+            detail = row.get("PluginDetailFile")
+            if not detail:
+                raise DependencyError("No decoded UserAssist plugin detail; generic Registry output is insufficient")
+            detail_path = Path(detail) if Path(detail).is_absolute() else output / detail
+            check_ancestors(detail_path)
+            if not detail_path.resolve().is_relative_to(output.resolve()) or not detail_path.is_file():
+                raise ParserError("Plugin detail is missing or outside controlled output")
+            with detail_path.open(encoding="utf-8-sig", newline="") as details:
+                plugin_rows = list(csv.DictReader(details))
+            if not any(r.get("ProgramName") == row["ValueData"] and r.get("RunCounter") for r in plugin_rows):
+                raise DependencyError("Decoded UserAssist fields cannot be corroborated in plugin detail")
+            if not row["ValueData2"].startswith("Last executed:") or not row["ValueData3"].startswith("Run count:"):
+                raise ParserError("Unsupported UserAssist decoder field format")
+            raw_time = row["ValueData2"].removeprefix("Last executed:").strip()
+            normalized = native_time(raw_time.replace(" ", "T") + "Z" if raw_time else None, "iso8601", "userassist_last_execution")
+            if raw_time:
                 stamp = normalized.model_copy(update={"raw_value": raw_time, "normalization_basis": "RegistryPlugin.UserAssist 0.5 explicitly exports LastExecuted.ToUniversalTime(); verify pinned plugin", "raw_precision": "100 nanoseconds as exported; UTC view uses microseconds"})
-                locator = SourceLocator(kind="registry_value", identifiers={"key_path": row["KeyPath"], "value_name": row["ValueName"]})
-                row["plugin_detail_sha256"] = sha256_file(detail_path)
-                row["raw_binary_value"] = None  # Preserved in source hive; not exported by this plugin.
-                records.append(EvidenceRecord(record_id=stable_record_id(case.manifest.case_id, "userassist", item.calculated_sha256, locator, item_id=item.item_id), case_id=case.manifest.case_id, family="userassist", item_id=item.item_id, source_sha256=item.calculated_sha256, original_path=item.original_path, locator=locator, times=[stamp], account=item.account, sid=item.sid, application="Windows UserAssist", target=row["ValueData"], parser=self.identity, raw_fields=row, raw_output_locator={"path": path.relative_to(case.working_root).as_posix(), "line": line, "sha256": digest}, limitations=["GUI program-activity trace, not attribution to a person; counter/focus fields have plugin-specific semantics.", "Raw encoded name and original hive locator retained; binary value bytes remain in the preserved hive and are not exported by this plugin.", "Registry key last-write time is not used as an action timestamp."]))
+            else:
+                stamp = normalized.model_copy(update={"raw_value": raw_time, "uncertainty": "No execution time recorded for this value (for example a UEME_* counter)"})
+            locator = SourceLocator(kind="registry_value", identifiers={"key_path": row["KeyPath"], "value_name": row["ValueName"]})
+            row["plugin_detail_sha256"] = sha256_file(detail_path)
+            row["raw_binary_value"] = None  # Preserved in source hive; not exported by this plugin.
+            records.append(EvidenceRecord(record_id=stable_record_id(case.manifest.case_id, "userassist", item.calculated_sha256, locator, item_id=item.item_id), case_id=case.manifest.case_id, family="userassist", item_id=item.item_id, source_sha256=item.calculated_sha256, original_path=item.original_path, locator=locator, times=[stamp], account=item.account, sid=item.sid, application="Windows UserAssist", target=row["ValueData"], parser=self.identity, raw_fields=row, raw_output_locator={"path": path.relative_to(case.working_root).as_posix(), "line": line, "sha256": digest}, limitations=["GUI program-activity trace, not attribution to a person; counter/focus fields have plugin-specific semantics.", "Raw encoded name and original hive locator retained; binary value bytes remain in the preserved hive and are not exported by this plugin.", "Registry key last-write time is not used as an action time.", "UserAssist keeps only the latest execution time per entry; earlier runs of the same program are not visible here."]))
         return records
+
+    @staticmethod
+    def _is_format_version(row):
+        # Each {GUID} key has a "Version" value (5 on current Windows). It describes the format; it is not an execution entry.
+        return row["ValueName"] == "Version" and re.fullmatch(r".*\\UserAssist\\\{[0-9A-Fa-f-]+\}", row["KeyPath"]) is not None
+
+    @staticmethod
+    def _signature(row):
+        return (row["ValueName"], row["ValueData"], row["ValueData2"], row["ValueData3"])
