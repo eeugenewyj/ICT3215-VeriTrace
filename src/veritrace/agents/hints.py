@@ -7,7 +7,9 @@ shows an action, and which word of the claim names the file, are deterministic: 
 import re
 
 from ..settings import FAMILIES as SOURCE_FAMILIES
-from .timecheck import claimed_seconds, time_agrees, time_conflict
+from ..evidence.index import SearchFilters
+from .claims import NO_RECALL
+from .timecheck import approximate_seconds, claimed_seconds, stated_date, time_agrees, time_conflict
 
 # action -> evidence families that can show it, most direct first
 FAMILIES = {
@@ -55,10 +57,10 @@ def family_can_show(claim, records):
 DOWNLOAD_ROLES = {"download_started", "download_completed"}
 
 
-def shows_action(claim, record, claims, source_timezone):
-    """Does this record show the claimed action on the claim's target (and at its stated clock time, if exact)?
+def shows_activity(claim, record, claims):
+    """Does this record show the claimed action on the claim's target, whatever time it gives?
     Stricter than record_can_show: a page visit does not show a download, and a record for another file shows
-    nothing about this one. Used only to catch a verdict that contradicts the record the model itself cited."""
+    nothing about this one."""
     if not record_can_show(claim, record):
         return False
     word = target_word(resolved_target(claim, claims))
@@ -66,11 +68,59 @@ def shows_action(claim, record, claims, source_timezone):
         return False
     if claim.action == "download_file" and not any(t.role in DOWNLOAD_ROLES for t in record.times):
         return False
+    return True
+
+
+def shows_action(claim, record, claims, source_timezone):
+    """Does this record show the claimed action on the claim's target (and at its stated clock time, if exact)?
+    Used only to catch a verdict that contradicts the record the model itself cited."""
+    if not shows_activity(claim, record, claims):
+        return False
     if claimed_seconds(claim.time_expression) is not None and not time_agrees(claim, [record], source_timezone):
         return False
     if time_conflict(claim, [record], source_timezone):
         return False
     return True
+
+
+def time_contradiction(claim, claims, cited, index, case_id, source_timezone):
+    """A sentence when the witness's clock time is contradicted by the evidence, else None.
+    Regression (acquired run, "I downloaded X at about 9:00 am"): the only download of X is at 18:11, nine hours
+    away, yet the host could only withhold 'supported' and answer inconclusive. The host searches the whole case
+    itself, so the result does not depend on what the model retrieved before its context ran out. It applies
+    only when the claim is not a denial, the witness gave a clock time, and every record in the case that shows
+    this action on this target is outside that time. One record at the stated time, or too many records to
+    read, keeps the answer inconclusive."""
+    if claim.negated or NO_RECALL in claim.uncertainty or not source_timezone:
+        return None
+    if claimed_seconds(claim.time_expression) is None and approximate_seconds(claim.time_expression) is None:
+        return None
+    word = target_word(resolved_target(claim, claims))
+    families = FAMILIES.get(claim.action)
+    if not word or not families:
+        return None
+    found = {}
+    for family in families:
+        page = index.search(case_id, SearchFilters(family=family, target=word), None, 25)
+        if page.next_cursor:
+            return None
+        for record in page.records:
+            record = index.get(case_id, record.record_id)
+            if shows_activity(claim, record, claims):
+                found[record.record_id] = record
+    if not found or not any(r.record_id in found for r in cited):
+        return None
+    day = stated_date(claim.time_expression)
+    if day is not None:
+        # An occurrence on another calendar day may be a separate event. The
+        # clock check needs action evidence on the witness's stated local day.
+        dated = claim.model_copy(update={"time_expression": day.isoformat()})
+        if time_conflict(dated, list(found.values()), source_timezone):
+            return None
+    problem = time_conflict(claim, list(found.values()), source_timezone)
+    if not problem:
+        return None
+    return f"every record that shows this action on this target is outside the stated time ({problem.split(', but ', 1)[-1]})"
 
 
 def consistency_problem(claim, status):

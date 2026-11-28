@@ -1,9 +1,19 @@
 # Implementation and validation status
 
 Updated 28 November 2026 after controlled development tests and integration of
-upstream commit 737b03e (denials and witness uncertainty).
+upstream commits 737b03e (denials and uncertainty) and 5e8cd16 (clock checks).
 
 ## Current desktop checkpoint: controlled development tests
+
+The latest merge combines the incoming bounded case-index clock-mismatch check
+with the existing calendar and generic-target guards. Date-only statements do
+not enable clock contradiction, and records found only on another local day
+leave the time assessment inconclusive. Same-day clock mismatches retain the
+incoming behavior. The merged suite reports **353 passed, one integration test
+deselected**, including three added calendar/clock interaction regressions.
+These checks are recorded under `.runs/merge-20261128-time-checks/`.
+The live model results below predate this latest clock-check merge; no new
+model run or formal accuracy result is claimed for it.
 
 The original test pack contains 13 scenarios and 27 draft atomic label rows from
 one standard01 acquisition. Four recorded source versions completed 23 live
